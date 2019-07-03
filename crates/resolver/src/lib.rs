@@ -11,9 +11,9 @@
 //!
 //! Unlike the `trust-dns` client, this tries to provide a simpler interface to perform DNS queries. For update options, i.e. Dynamic DNS, the `trust-dns` crate must be used instead. The Resolver library is capable of searching multiple domains (this can be disabled by using an FQDN during lookup), dual-stack IPv4/IPv6 lookups, performing chained CNAME lookups, and features connection metric tracking for attempting to pick the best upstream DNS resolver.
 //!
-//! There are two types for performing DNS queries, `Resolver` and `ResolverFuture`. `Resolver` is the easiest to work with, it is a wrapper around `ResolverFuture`. `ResolverFuture` is a `Tokio` based async resolver, and can be used inside any `Tokio` based system.
+//! There are two types for performing DNS queries, [`Resolver`] and [`AsyncResolver`]. `Resolver` is the easiest to work with, it is a wrapper around [`AsyncResolver`]. `AsyncResolver` is a `Tokio` based async resolver, and can be used inside any `Tokio` based system.
 //!
-//! This as best as possible attempts to abide by the the DNS RFCs, please file issues at https://github.com/bluejekyll/trust-dns .
+//! This as best as possible attempts to abide by the DNS RFCs, please file issues at https://github.com/bluejekyll/trust-dns .
 //!
 //! # Usage
 //!
@@ -85,7 +85,7 @@
 //!
 //! ## Using the Tokio/Async Resolver
 //!
-//! For more advanced asynchronous usage, the ResolverFuture is integrated with Tokio. In fact, the ResolverFuture is used by the synchronous Resolver for all lookups.
+//! For more advanced asynchronous usage, the `AsyncResolver`] is integrated with Tokio. In fact, the [`AsyncResolver`] is used by the synchronous Resolver for all lookups.
 //!
 //! ```rust
 //! # extern crate futures;
@@ -129,7 +129,7 @@
 //! # }
 //! ```
 //!
-//! Generally after a lookup in an asynchornous context, there would probably be a connection made to a server, for example:
+//! Generally after a lookup in an asynchronous context, there would probably be a connection made to a server, for example:
 //!
 //! ```c
 //! let result = io_loop.block_on(lookup_future.and_then(|ips| {
@@ -145,7 +145,7 @@
 //!
 //! DNS over TLS is experimental in the Trust-DNS Resolver library. The underlying implementations have been available as addon libraries to the Client and Server, but the configuration is experimental in Trust-DNS Resolver. *WARNING* The trust-dns developers make no claims on the security and/or privacy guarantees of this implementation.
 //!
-//! To use you must compile in support with one of the `dns-over-tls` features. There are three: `dns-over-openssl`, `dns-over-native-tls`, and `dns-over-rustls`. The reason for each is to make the Trust-DNS libraries flexible for different deployments, and/or security concerns. The easiest to use will generally be `dns-over-rustls` which utilizes the native Rust library (a rework of the `boringssl` project), this should compile and be usable on most ARM and x86 platforms. `dns-over-native-tls` will utilize the hosts TLS implementation where available or fallback to `openssl` where not. `dns-over-openssl` will specify that `openssl` should be used (which is a perfect fine option if required). If more than one is specified, the presidence will be in this order (i.e. only one can be used at a time) `dns-over-rustls`, `dns-over-native-tls`, and then `dns-over-openssl`. *NOTICE* thetrust-dns developers are not responsible for any choice of library that does not meet required security requirements.
+//! To use you must compile in support with one of the `dns-over-tls` features. There are three: `dns-over-openssl`, `dns-over-native-tls`, and `dns-over-rustls`. The reason for each is to make the Trust-DNS libraries flexible for different deployments, and/or security concerns. The easiest to use will generally be `dns-over-rustls` which utilizes the native Rust library (a rework of the `boringssl` project), this should compile and be usable on most ARM and x86 platforms. `dns-over-native-tls` will utilize the hosts TLS implementation where available or fallback to `openssl` where not. `dns-over-openssl` will specify that `openssl` should be used (which is a perfect fine option if required). If more than one is specified, the precedence will be in this order (i.e. only one can be used at a time) `dns-over-rustls`, `dns-over-native-tls`, and then `dns-over-openssl`. *NOTICE* the trust-dns developers are not responsible for any choice of library that does not meet required security requirements.
 //!
 //! ### Example
 //!
@@ -199,7 +199,7 @@ extern crate resolv_conf;
 #[macro_use]
 extern crate serde;
 extern crate smallvec;
-#[cfg(any(feature = "tokio", test))]
+#[cfg(feature = "tokio")]
 extern crate tokio;
 extern crate tokio_executor;
 extern crate tokio_tcp;
@@ -226,7 +226,7 @@ pub mod lookup_ip;
 pub mod lookup_state;
 #[doc(hidden)]
 pub mod name_server;
-#[cfg(any(feature = "tokio", test))]
+#[cfg(feature = "tokio")]
 mod resolver;
 pub mod system_conf;
 #[cfg(feature = "dns-over-tls")]
@@ -237,7 +237,7 @@ pub use self::proto::rr::{IntoName, Name, TryParseIp};
 
 pub use async_resolver::{AsyncResolver, Background, BackgroundLookup, BackgroundLookupIp};
 pub use hosts::Hosts;
-#[cfg(any(feature = "tokio", test))]
+#[cfg(feature = "tokio")]
 pub use resolver::Resolver;
 
 /// This is an alias for [`AsyncResolver`], which replaced the type previously

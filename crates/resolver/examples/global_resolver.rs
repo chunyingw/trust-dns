@@ -47,7 +47,7 @@ lazy_static! {
                 #[cfg(any(unix, windows))]
                 {
                     // use the system resolver configuration
-                    AsyncResolver::from_system_conf().expect("Failed to create ResolverFuture")
+                    AsyncResolver::from_system_conf().expect("Failed to create AsyncResolver")
                 }
 
                 // For other operating systems, we can use one of the preconfigured definitions
@@ -87,8 +87,8 @@ lazy_static! {
 
 /// Provide a general purpose resolution function.
 ///
-/// This looks up the `host` (a &str or String is good), and combines that with the provided port
-///   this mimics the lookup functions of std::net.
+/// This looks up the `host` (a `&str` or `String` is good), and combines that with the provided port
+///   this mimics the lookup functions of `std::net`.
 pub fn resolve<N: IntoName + TryParseIp>(host: N, port: u16) -> IoFuture<Vec<SocketAddr>> {
     // Now we use the global resolver to perform a lookup_ip.
     let resolve_future = GLOBAL_DNS_RESOLVER.lookup_ip(host).then(move |result| {

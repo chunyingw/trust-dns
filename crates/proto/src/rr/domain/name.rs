@@ -5,7 +5,7 @@
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
 // copied, modified, or distributed except according to those terms.
 
-//! domain name, aka labels, implementaton
+//! domain name, aka labels, implementation
 
 use std::borrow::Borrow;
 use std::char;
@@ -201,10 +201,10 @@ impl Name {
         self
     }
 
-    /// Appends the `domain` to `self`, making the new Name an FQDN
+    /// Appends the `domain` to `self`, making the new `Name` an FQDN
     ///
-    /// This is an alias for append_name with the added effect of marking the new Name as
-    ///  a fully-qualified-domain-name.
+    /// This is an alias for `append_name` with the added effect of marking the new `Name` as
+    /// a fully-qualified-domain-name.
     ///
     /// # Examples
     ///
@@ -297,7 +297,7 @@ impl Name {
         }
     }
 
-    /// same as zone_of allows for case sensitive call
+    /// same as `zone_of` allows for case sensitive call
     pub fn zone_of_case(&self, name: &Self) -> bool {
         let self_len = self.labels.len();
         let name_len = name.labels.len();
@@ -401,7 +401,7 @@ impl Name {
         self.labels.iter().fold(dots, |acc, item| acc + item.len())
     }
 
-    /// Returns whether the length of the labels, in bytes is 0. In practive, since '.' counts as
+    /// Returns whether the length of the labels, in bytes is 0. In practice, since '.' counts as
     /// 1, this is never the case so the method returns false.
     pub fn is_empty(&self) -> bool {
         false
@@ -478,8 +478,8 @@ impl Name {
         Self::from_encoded_str::<LabelEncUtf8>(name.as_ref(), None)
     }
 
-    /// First attempts to decode via from_utf8, if that fails IDNA checks, than falls back to
-    ///   ascii decoding.
+    /// First attempts to decode via `from_utf8`, if that fails IDNA checks, than falls back to
+    /// ascii decoding.
     ///
     /// # Examples
     ///
@@ -507,7 +507,7 @@ impl Name {
 
         let mut state = ParseState::Label;
 
-        // short cirtuit root parse
+        // short circuit root parse
         if local == "." {
             name.set_fqdn(true);
             return Ok(name);
@@ -618,7 +618,7 @@ impl Name {
 
                 // before we write the label, let's look for the current set of labels.
                 if let Some(loc) = label_ptr {
-                    // reset back to the begining of this label, and then write the pointer...
+                    // reset back to the beginning of this label, and then write the pointer...
                     encoder.set_offset(*label_idx);
                     encoder.trim();
 
@@ -972,7 +972,7 @@ impl<'r> BinDecodable<'r> for Name {
     /// parses the chain of labels
     ///  this has a max of 255 octets, with each label being less than 63.
     ///  all names will be stored lowercase internally.
-    /// This will consume the portions of the Vec which it is reading...
+    /// This will consume the portions of the `Vec` which it is reading...
     fn read(decoder: &mut BinDecoder<'r>) -> ProtoResult<Name> {
         read_inner(decoder, None)
     }
@@ -1038,7 +1038,7 @@ fn read_inner<'r>(decoder: &mut BinDecoder<'r>, max_idx: Option<usize>) -> Proto
             // In order to reduce the size of messages, the domain system utilizes a
             // compression scheme which eliminates the repetition of domain names in a
             // message.  In this scheme, an entire domain name or a list of labels at
-            // the end of a domain name is replaced with a pointer to a prior occurance
+            // the end of a domain name is replaced with a pointer to a prior occurrence
             // of the same name.
             //
             // The pointer takes the form of a two octet sequence:
@@ -1324,7 +1324,7 @@ mod tests {
 
     #[test]
     fn test_recursive_pointer() {
-        // points to an invalid begining label marker
+        // points to an invalid beginning label marker
         let bytes = vec![0xC0, 0x01];
         let mut d = BinDecoder::new(&bytes);
 

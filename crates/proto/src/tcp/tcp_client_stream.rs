@@ -36,7 +36,7 @@ impl<S: Connect + 'static + Send> TcpClientStream<S> {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(
         name_server: SocketAddr,
-    ) -> (TcpClientConnect<S::Transport>, Box<DnsStreamHandle + Send>) {
+    ) -> (TcpClientConnect<S::Transport>, Box<dyn DnsStreamHandle + Send>) {
         Self::with_timeout(name_server, Duration::from_secs(5))
     }
 
@@ -49,7 +49,7 @@ impl<S: Connect + 'static + Send> TcpClientStream<S> {
     pub fn with_timeout(
         name_server: SocketAddr,
         timeout: Duration,
-    ) -> (TcpClientConnect<S::Transport>, Box<DnsStreamHandle + Send>) {
+    ) -> (TcpClientConnect<S::Transport>, Box<dyn DnsStreamHandle + Send>) {
         let (stream_future, sender) = TcpStream::<S>::with_timeout(name_server, timeout);
 
         let new_future = Box::new(
@@ -106,7 +106,7 @@ impl<S: AsyncRead + AsyncWrite + Send> Stream for TcpClientStream<S> {
 
 // TODO: create unboxed future for the TCP Stream
 /// A future that resolves to an TcpClientStream
-pub struct TcpClientConnect<S>(Box<Future<Item = TcpClientStream<S>, Error = ProtoError> + Send>);
+pub struct TcpClientConnect<S>(Box<dyn Future<Item = TcpClientStream<S>, Error = ProtoError> + Send>);
 
 impl<S> Future for TcpClientConnect<S> {
     type Item = TcpClientStream<S>;
@@ -117,10 +117,10 @@ impl<S> Future for TcpClientConnect<S> {
     }
 }
 
-#[cfg(any(feature = "tokio-compat", test))]
+#[cfg(feature = "tokio-compat")]
 use tokio_tcp::TcpStream as TokioTcpStream;
 
-#[cfg(any(feature = "tokio-compat", test))]
+#[cfg(feature = "tokio-compat")]
 impl Connect for TokioTcpStream {
     type Transport = TokioTcpStream;
     type Future = tokio_tcp::ConnectFuture;
@@ -137,7 +137,7 @@ use std::net::{IpAddr, Ipv4Addr};
 
 #[test]
 // this fails on linux for some reason. It appears that a buffer somewhere is dirty
-//  and subsequent reads of a mesage buffer reads the wrong length. It works for 2 iterations
+//  and subsequent reads of a message buffer reads the wrong length. It works for 2 iterations
 //  but not 3?
 // #[cfg(not(target_os = "linux"))]
 fn test_tcp_client_stream_ipv4() {
@@ -191,10 +191,10 @@ fn tcp_client_stream_test(server_addr: IpAddr) {
 
             socket
                 .set_read_timeout(Some(std::time::Duration::from_secs(5)))
-                .unwrap(); // should recieve something within 5 seconds...
+                .unwrap(); // should receive something within 5 seconds...
             socket
                 .set_write_timeout(Some(std::time::Duration::from_secs(5)))
-                .unwrap(); // should recieve something within 5 seconds...
+                .unwrap(); // should receive something within 5 seconds...
 
             for _ in 0..send_recv_times {
                 // wait for some bytes...

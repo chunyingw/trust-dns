@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-// there is not much to format in this file, and we don't want rusftfmt to mess up the comments
+// there is not much to format in this file, and we don't want rustfmt to mess up the comments
 
 //! All defined response codes in DNS
 
@@ -71,7 +71,7 @@ pub enum ResponseCode {
     /// Server Failure [RFC 1035](https://tools.ietf.org/html/rfc1035)
     ServFail,
 
-    /// Non-Esistent Domain [RFC 1035](https://tools.ietf.org/html/rfc1035)
+    /// Non-Existent Domain [RFC 1035](https://tools.ietf.org/html/rfc1035)
     NXDomain,
 
     /// Not Implemented [RFC 1035](https://tools.ietf.org/html/rfc1035)
@@ -177,7 +177,7 @@ impl Display for ResponseCode {
     }
 }
 
-/// Convert from ResponseCode to u16
+/// Convert from `ResponseCode` to `u16`
 ///
 /// ```
 /// use std::convert::From;
@@ -221,7 +221,7 @@ impl From<ResponseCode> for u16 {
     }
 }
 
-/// Convert from u16 to ResponseCode
+/// Convert from `u16` to `ResponseCode`
 ///
 /// ```
 /// use std::convert::From;

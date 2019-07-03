@@ -193,9 +193,9 @@ impl NAPTR {
 /// verifies that the flags are valid
 pub fn verify_flags(flags: &[u8]) -> bool {
     flags.iter().all(|c| match c {
-        b'0'...b'9' => true,
-        b'a'...b'z' => true,
-        b'A'...b'Z' => true,
+        b'0'..=b'9' => true,
+        b'a'..=b'z' => true,
+        b'A'..=b'Z' => true,
         _ => false,
     })
 }
@@ -218,7 +218,7 @@ pub fn read(decoder: &mut BinDecoder) -> ProtoResult<NAPTR> {
     ))
 }
 
-/// Declares the method for emiting this type
+/// Declares the method for emitting this type
 pub fn emit(encoder: &mut BinEncoder, naptr: &NAPTR) -> ProtoResult<()> {
     naptr.order.emit(encoder)?;
     naptr.preference.emit(encoder)?;

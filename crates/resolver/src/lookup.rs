@@ -71,7 +71,7 @@ impl Lookup {
         }
     }
 
-    /// Returns a reference to the Query that was used to produce this result.
+    /// Returns a reference to the `Query` that was used to produce this result.
     pub fn query(&self) -> &Query {
         &self.query
     }
@@ -117,7 +117,7 @@ impl Lookup {
     }
 }
 
-/// Borrowed view of set of RDatas returned from a Lookup
+/// Borrowed view of set of [`RData`]s returned from a Lookup
 pub struct LookupIter<'a>(Iter<'a, Record>);
 
 impl<'a> Iterator for LookupIter<'a> {
@@ -128,7 +128,7 @@ impl<'a> Iterator for LookupIter<'a> {
     }
 }
 
-/// Borrowed view of set of RDatas returned from a Lookup
+/// Borrowed view of set of [`RData`]s returned from a Lookup
 pub struct LookupRecordIter<'a>(Iter<'a, Record>);
 
 impl<'a> Iterator for LookupRecordIter<'a> {
@@ -143,7 +143,7 @@ impl IntoIterator for Lookup {
     type Item = RData;
     type IntoIter = LookupIntoIter;
 
-    /// This is most likely not a free conversion, the RDatas will be cloned if data is
+    /// This is most likely not a free conversion, the `RData`s will be cloned if data is
     ///  held behind an Arc with more than one reference (which is most likely the case coming from cache)
     fn into_iter(self) -> Self::IntoIter {
         LookupIntoIter {
@@ -153,9 +153,9 @@ impl IntoIterator for Lookup {
     }
 }
 
-/// Borrowed view of set of RDatas returned from a Lookup
+/// Borrowed view of set of [`RData`]s returned from a [`Lookup`].
 ///
-/// This is not usually a zero overhead Iterator, it may result in clones of the RData
+/// This is not usually a zero overhead `Iterator`, it may result in clones of the [`RData`].
 pub struct LookupIntoIter {
     // the result of the try_unwrap on Arc
     records: Result<IntoIter<Record>, Arc<Vec<Record>>>,
@@ -188,7 +188,7 @@ pub enum LookupEither<C: DnsHandle + 'static, P: ConnectionProvider<ConnHandle =
 }
 
 impl<C: DnsHandle, P: ConnectionProvider<ConnHandle = C>> DnsHandle for LookupEither<C, P> {
-    type Response = Box<Future<Item = DnsResponse, Error = ProtoError> + Send>;
+    type Response = Box<dyn Future<Item = DnsResponse, Error = ProtoError> + Send>;
 
     fn is_verifying_dnssec(&self) -> bool {
         match *self {
@@ -207,7 +207,7 @@ impl<C: DnsHandle, P: ConnectionProvider<ConnHandle = C>> DnsHandle for LookupEi
     }
 }
 
-/// The Future returned from ResolverFuture when performing a lookup.
+/// The Future returned from [`AsyncResolver`] when performing a lookup.
 #[doc(hidden)]
 pub struct LookupFuture<C = LookupEither<ConnectionHandle, StandardConnection>>
 where
@@ -217,7 +217,7 @@ where
     names: Vec<Name>,
     record_type: RecordType,
     options: DnsRequestOptions,
-    query: Box<Future<Item = Lookup, Error = ResolveError> + Send>,
+    query: Box<dyn Future<Item = Lookup, Error = ResolveError> + Send>,
 }
 
 impl<C: DnsHandle + 'static> LookupFuture<C> {
@@ -239,7 +239,7 @@ impl<C: DnsHandle + 'static> LookupFuture<C> {
             ResolveError::from(ResolveErrorKind::Message("can not lookup for no names"))
         });
 
-        let query: Box<Future<Item = Lookup, Error = ResolveError> + Send> = match name {
+        let query: Box<dyn Future<Item = Lookup, Error = ResolveError> + Send> = match name {
             Ok(name) => {
                 Box::new(client_cache.lookup(Query::query(name, record_type), options.clone()))
             }
@@ -550,7 +550,7 @@ pub mod tests {
     }
 
     impl DnsHandle for MockDnsHandle {
-        type Response = Box<Future<Item = DnsResponse, Error = ProtoError> + Send>;
+        type Response = Box<dyn Future<Item = DnsResponse, Error = ProtoError> + Send>;
 
         fn send<R: Into<DnsRequest>>(&mut self, _: R) -> Self::Response {
             Box::new(future::result(

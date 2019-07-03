@@ -24,13 +24,13 @@ use AsyncResolver;
 ///
 /// For forward (A) lookups, hostname -> IP address, see: `Resolver::lookup_ip`
 ///
-/// Special note about resource consumption. The Resolver and all Trust-DNS software is built around the Tokio async-io library. This synchronous Resolver is intended to be a simpler wrapper for of the [`trust_dns_resolver::ResolverFuture`]. To allow the Resolver to be [`Send`] + [`Sync`], the construction of the `ResolverFuture` is lazy, this means some of the features of the `ResolverFuture`, like performance based resolution via the most efficient `NameServer` will be lost (the lookup cache is shared across invocations of the `Resolver`). If these other features of the Trust-DNS Resolver are desired, please use the tokio based `ResolverFuture`.
+/// Special note about resource consumption. The Resolver and all Trust-DNS software is built around the Tokio async-io library. This synchronous Resolver is intended to be a simpler wrapper for of the [`AsyncResolver`]. To allow the `Resolver` to be [`Send`] + [`Sync`], the construction of the `AsyncResolver` is lazy, this means some of the features of the `AsyncResolver`, like performance based resolution via the most efficient `NameServer` will be lost (the lookup cache is shared across invocations of the `Resolver`). If these other features of the Trust-DNS Resolver are desired, please use the tokio based [`AsyncResolver`].
 ///
-/// *Note: Threaded/Sync usage*: In multithreaded scenarios, the internal Tokio Runtime will block on an internal Mutex for the tokio Runtime in use. For higher performance, it's recommended to use the `AsyncResolver`.
+/// *Note: Threaded/Sync usage*: In multithreaded scenarios, the internal Tokio Runtime will block on an internal Mutex for the tokio Runtime in use. For higher performance, it's recommended to use the [`AsyncResolver`].
 pub struct Resolver {
     // TODO: Mutex allows this to be Sync, another option would be to instantiate a thread_local, but that has other
     //   drawbacks. One major issues, is if this Resolver is shared across threads, it will cause all to block on any
-    //   query. A TLS on the otherhand would not, at the cost of only allowing a Resolver to be configured once per Thread
+    //   query. A TLS on the other hand would not, at the cost of only allowing a Resolver to be configured once per Thread
     runtime: Mutex<Runtime>,
     async_resolver: AsyncResolver,
 }
@@ -43,7 +43,7 @@ macro_rules! lookup_fn {
 ///
 /// # Arguments
 ///
-/// * `query` - a str which parses to a domain name, failure to parse will return an error
+/// * `query` - a `&str` which parses to a domain name, failure to parse will return an error
 pub fn $p(&self, query: &str) -> ResolveResult<$l> {
     let lookup = self.async_resolver.$p(query);
     self.runtime.lock()?.block_on(lookup)
@@ -72,7 +72,7 @@ impl Resolver {
     ///
     /// # Returns
     ///
-    /// A new Resolver or an error if there was an error with the configuration.
+    /// A new `Resolver` or an error if there was an error with the configuration.
     pub fn new(config: ResolverConfig, options: ResolverOpts) -> io::Result<Self> {
         let mut builder = runtime::Builder::new();
         builder.core_threads(1);
@@ -94,7 +94,7 @@ impl Resolver {
     ///
     /// # Returns
     ///
-    /// A new Resolver or an error if there was an error with the configuration.
+    /// A new `Resolver` or an error if there was an error with the configuration.
     pub fn default() -> io::Result<Self> {
         Self::new(ResolverConfig::default(), ResolverOpts::default())
     }
@@ -142,7 +142,7 @@ impl Resolver {
     /// * `service` - service to lookup, e.g. ldap or http
     /// * `protocol` - wire protocol, e.g. udp or tcp
     /// * `name` - zone or other name at which the service is located.
-    #[deprecated(note = "use lookup_srv instead, this interface is none ideal")]
+    #[deprecated(note = "use lookup_srv instead, this interface is not ideal")]
     pub fn lookup_service(
         &self,
         service: &str,
@@ -164,6 +164,7 @@ impl Resolver {
     lookup_fn!(ipv4_lookup, lookup::Ipv4Lookup);
     lookup_fn!(ipv6_lookup, lookup::Ipv6Lookup);
     lookup_fn!(mx_lookup, lookup::MxLookup);
+    #[deprecated(note = "use lookup_srv instead, this interface is not ideal")]
     lookup_fn!(srv_lookup, lookup::SrvLookup);
     lookup_fn!(txt_lookup, lookup::TxtLookup);
 }

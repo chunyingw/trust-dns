@@ -52,7 +52,7 @@ pub enum DigestType {
 }
 
 impl DigestType {
-    /// TODO: add an Unknown DigestType and make this infalible
+    /// TODO: add an Unknown DigestType and make this infallible
     /// http://www.iana.org/assignments/dns-sec-alg-numbers/dns-sec-alg-numbers.xhtml
     pub fn from_u8(value: u8) -> ProtoResult<Self> {
         match value {
@@ -144,6 +144,8 @@ impl From<Algorithm> for DigestType {
             Algorithm::RSASHA512 => DigestType::SHA512,
             Algorithm::ECDSAP384SHA384 => DigestType::SHA384,
             Algorithm::ED25519 => DigestType::ED25519,
+
+            Algorithm::Unknown(_) => DigestType::SHA512,
         }
     }
 }

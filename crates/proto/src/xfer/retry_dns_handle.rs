@@ -39,7 +39,7 @@ impl<H> DnsHandle for RetryDnsHandle<H>
 where
     H: DnsHandle + 'static,
 {
-    type Response = Box<Future<Item = DnsResponse, Error = ProtoError> + Send>;
+    type Response = Box<dyn Future<Item = DnsResponse, Error = ProtoError> + Send>;
 
     fn send<R: Into<DnsRequest>>(&mut self, request: R) -> Self::Response {
         let request = request.into();
@@ -107,7 +107,7 @@ mod test {
     }
 
     impl DnsHandle for TestClient {
-        type Response = Box<Future<Item = DnsResponse, Error = ProtoError> + Send>;
+        type Response = Box<dyn Future<Item = DnsResponse, Error = ProtoError> + Send>;
 
         fn send<R: Into<DnsRequest>>(&mut self, _: R) -> Self::Response {
             let i = self.attempts.get();
@@ -135,7 +135,7 @@ mod test {
         );
         let test1 = Message::new();
         let result = handle.send(test1).wait().expect("should have succeeded");
-        assert_eq!(result.id(), 1); // this is checking the number of iterations the TestCient ran
+        assert_eq!(result.id(), 1); // this is checking the number of iterations the TestClient ran
     }
 
     #[test]

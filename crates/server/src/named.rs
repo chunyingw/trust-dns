@@ -409,7 +409,7 @@ pub fn main() {
     #[cfg_attr(not(feature = "dns-over-tls"), allow(unused_mut))]
     let mut server = ServerFuture::new(catalog);
 
-    let server_future: Box<Future<Item = (), Error = ()> + Send> =
+    let server_future: Box<dyn Future<Item = (), Error = ()> + Send> =
         Box::new(future::lazy(move || {
             // load all the listeners
             for udp_socket in udp_sockets {
@@ -459,7 +459,7 @@ pub fn main() {
             info!("awaiting connections...");
 
             // TODO: how to do threads? should we do a bunch of listener threads and then query threads?
-            // Ideally the processing would be n-threads for recieving, which hand off to m-threads for
+            // Ideally the processing would be n-threads for receiving, which hand off to m-threads for
             //  request handling. It would generally be the case that n <= m.
             info!("Server starting up");
             future::empty()

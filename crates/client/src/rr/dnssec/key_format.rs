@@ -42,6 +42,9 @@ impl KeyFormat {
         let password = password.as_bytes();
 
         match algorithm {
+            Algorithm::Unknown(v) => { 
+                Err(format!("unknown algorithm: {}", v).into())
+            }
             #[cfg(feature = "openssl")]
             e @ Algorithm::RSASHA1 | e @ Algorithm::RSASHA1NSEC3SHA1 => {
                 Err(format!("unsupported Algorithm (insecure): {:?}", e).into())
@@ -142,6 +145,9 @@ impl KeyFormat {
         // generate the key
         #[allow(unused)]
         let key_pair: KeyPair<Private> = match algorithm {
+            Algorithm::Unknown(v) => {
+                return Err(format!("unknown algorithm: {}", v).into())
+            }
             #[cfg(feature = "openssl")]
             e @ Algorithm::RSASHA1 | e @ Algorithm::RSASHA1NSEC3SHA1 => {
                 return Err(format!("unsupported Algorithm (insecure): {:?}", e).into())
@@ -173,7 +179,7 @@ impl KeyFormat {
             KeyPair::EC(ref pkey) | KeyPair::RSA(ref pkey) => {
                 match self {
                     KeyFormat::Der => {
-                        // to avoid accientally storing a key where there was an expectation that it was password protected
+                        // to avoid accidentally storing a key where there was an expectation that it was password protected
                         if password.is_some() {
                             return Err(format!("Can only password protect PEM: {:?}", self).into());
                         }
@@ -230,7 +236,7 @@ impl KeyFormat {
             KeyPair::EC(ref pkey) | KeyPair::RSA(ref pkey) => {
                 match self {
                     KeyFormat::Der => {
-                        // to avoid accientally storing a key where there was an expectation that it was password protected
+                        // to avoid accidentally storing a key where there was an expectation that it was password protected
                         if password.is_some() {
                             return Err(format!("Can only password protect PEM: {:?}", self).into());
                         }
@@ -355,7 +361,7 @@ mod tests {
             ok_empty_pass,
             true,
         );
-        // TODO: disabled for now... add back in if ring suports passwords on pkcs8
+        // TODO: disabled for now... add back in if ring supports passwords on pkcs8
         // encode_decode_with_password(key_format,
         //                             password,
         //                             no_password,

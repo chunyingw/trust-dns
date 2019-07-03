@@ -98,7 +98,7 @@ impl Journal {
                                           \
                                             VALUES ($1, $2, $3, $4)",
             &[
-                &client_id as &ToSql,
+                &client_id as &dyn ToSql,
                 &soa_serial,
                 &timestamp,
                 &serial_record,
@@ -236,7 +236,7 @@ impl Journal {
         Ok(())
     }
 
-    /// initilizes the schema for the Journal
+    /// initializes the schema for the Journal
     pub fn schema_up(&mut self) -> PersistenceResult<i64> {
         while self.version < CURRENT_VERSION {
             match self.version + 1 {

@@ -22,7 +22,7 @@ use name_server;
 
 /// A pool of NameServers
 ///
-/// This is not expected to be used directly, see `ResolverFuture`.
+/// This is not expected to be used directly, see [`AsyncResolver`].
 #[derive(Clone)]
 pub struct NameServerPool<C: DnsHandle + 'static, P: ConnectionProvider<ConnHandle = C> + 'static> {
     // TODO: switch to FuturesMutex (Mutex will have some undesireable locking)
@@ -132,7 +132,7 @@ where
     C: DnsHandle + 'static,
     P: ConnectionProvider<ConnHandle = C> + 'static,
 {
-    type Response = Box<Future<Item = DnsResponse, Error = ProtoError> + Send>;
+    type Response = Box<dyn Future<Item = DnsResponse, Error = ProtoError> + Send>;
 
     fn send<R: Into<DnsRequest>>(&mut self, request: R) -> Self::Response {
         let opts = self.options;
@@ -159,7 +159,7 @@ where
 
         // TODO: should we allow mDNS to be used for standard lookups as well?
 
-        // it wasn't a local query, continue with standard looup path
+        // it wasn't a local query, continue with standard lookup path
         let request = mdns.take_request();
         Box::new(
             // First try the UDP connections
@@ -187,7 +187,7 @@ enum TrySend<C: DnsHandle + 'static, P: ConnectionProvider<ConnHandle = C> + 'st
         conns: Arc<Mutex<Vec<NameServer<C, P>>>>,
         request: Option<DnsRequest>,
     },
-    DoSend(Box<Future<Item = DnsResponse, Error = ProtoError> + Send>),
+    DoSend(Box<dyn Future<Item = DnsResponse, Error = ProtoError> + Send>),
 }
 
 impl<C, P> Future for TrySend<C, P>
@@ -230,10 +230,10 @@ where
 
                         // TODO: restrict this size to a maximum # of NameServers to try
                         // get a stable view for trying all connections
-                        //   we split into chunks of the numeber of parallel requests to issue
+                        //   we split into chunks of the number of parallel requests to issue
                         let mut conns: Vec<NameServer<C, P>> = conns.clone();
                         let request = request.take();
-                        let request = request.expect("bad state, mesage should never be None");
+                        let request = request.expect("bad state, message should never be None");
                         let request_loop = request.clone();
 
                         let loop_future = future::loop_fn(
@@ -318,7 +318,7 @@ mod mdns {
 
 pub enum Local {
     #[allow(dead_code)]
-    ResolveFuture(Box<Future<Item = DnsResponse, Error = ProtoError> + Send>),
+    ResolveFuture(Box<dyn Future<Item = DnsResponse, Error = ProtoError> + Send>),
     NotMdns(DnsRequest),
 }
 
@@ -336,7 +336,7 @@ impl Local {
     /// # Panics
     ///
     /// Panics if this is in fact a Local::NotMdns
-    fn take_future(self) -> Box<Future<Item = DnsResponse, Error = ProtoError> + Send> {
+    fn take_future(self) -> Box<dyn Future<Item = DnsResponse, Error = ProtoError> + Send> {
         match self {
             Local::ResolveFuture(future) => future,
             _ => panic!("non Local queries have no future, see take_message()"),

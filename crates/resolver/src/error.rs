@@ -31,7 +31,7 @@ pub enum ResolveErrorKind {
     NoRecordsFound {
         /// The query for which no records were found.
         query: Query,
-        /// A deadline after which the the `NXDOMAIN` response is no longer
+        /// A deadline after which the `NXDOMAIN` response is no longer
         /// valid, and the nameserver should be queried again.
         valid_until: Option<Instant>
     },
@@ -91,7 +91,7 @@ impl Clone for ResolveError {
 }
 
 impl Fail for ResolveError {
-    fn cause(&self) -> Option<&Fail> {
+    fn cause(&self) -> Option<&dyn Fail> {
         self.inner.cause()
     }
 

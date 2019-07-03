@@ -87,8 +87,10 @@ pub fn main() {
             .unwrap_or_else(|| panic!("bad algorithm format, expected '# STR': {}", next_line)),
     ).unwrap_or_else(|_| panic!("bad algorithm format, expected '# STR': {}", next_line));
 
-    let algorithm = Algorithm::from_u8(algorithm_num)
-        .unwrap_or_else(|_| panic!("unsupported algorithm: {}", next_line));
+    let algorithm = match Algorithm::from_u8(algorithm_num) {
+        Algorithm::Unknown(v) => panic!("unsupported algorithm {}: {}", v, next_line),
+        a => a,
+    };
 
     let pem_bytes = match algorithm {
         Algorithm::RSASHA256 => read_rsa(lines),
@@ -137,7 +139,7 @@ fn read_rsa<B: BufRead>(lines: Lines<B>) -> Vec<u8> {
             BigNum::from_slice(
                 &BASE64
                     .decode(value.as_bytes())
-                    .unwrap_or_else(|_| panic!("badly formated line, expected base64: {}", line)),
+                    .unwrap_or_else(|_| panic!("badly formatted line, expected base64: {}", line)),
             ).unwrap(),
         );
 

@@ -6,7 +6,7 @@ authors = ["Benjamin Fry <benjaminfry@me.com>"]
 # A short blurb about the package. This is not rendered in any format when
 # uploaded to crates.io (aka this is not markdown)
 description = """
-Trust-DNS is a safe and secure DNS library. This Resolver library  uses the Client library to perform all DNS queries. The Resolver is intended to be a high-level library for any DNS record resolution see Resolver and ResolverFuture for supported resolution types. The Client can be used for other queries.
+Trust-DNS is a safe and secure DNS library. This Resolver library  uses the Client library to perform all DNS queries. The Resolver is intended to be a high-level library for any DNS record resolution see Resolver and AsyncResolver for supported resolution types. The Client can be used for other queries.
 """
 
 # These URLs point to more information about the repository
@@ -61,7 +61,7 @@ path = "src/lib.rs"
 [dependencies]
 cfg-if = "0.1"
 failure = "0.1"
-futures = "^0.1.27"
+futures = "^0.1.28"
 lazy_static = "^1.0"
 log = "^0.4.1"
 lru-cache = "^0.1.2"

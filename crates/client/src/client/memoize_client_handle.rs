@@ -16,7 +16,7 @@ use client::ClientHandle;
 use op::Query;
 
 // TODO: move to proto
-/// A ClienHandle for memoized (cached) responses to queries.
+/// A ClientHandle for memoized (cached) responses to queries.
 ///
 /// This wraps a ClientHandle, changing the implementation `send()` to store the response against
 ///  the Message.Query that was sent. This should reduce network traffic especially during things
@@ -45,7 +45,7 @@ impl<H> DnsHandle for MemoizeClientHandle<H>
 where
     H: ClientHandle,
 {
-    type Response = Box<Future<Item = DnsResponse, Error = ProtoError> + Send>;
+    type Response = Box<dyn Future<Item = DnsResponse, Error = ProtoError> + Send>;
 
     fn send<R: Into<DnsRequest>>(&mut self, request: R) -> Self::Response {
         let request = request.into();
@@ -89,7 +89,7 @@ mod test {
     }
 
     impl DnsHandle for TestClient {
-        type Response = Box<Future<Item = DnsResponse, Error = ProtoError> + Send>;
+        type Response = Box<dyn Future<Item = DnsResponse, Error = ProtoError> + Send>;
 
         fn send<R: Into<DnsRequest>>(&mut self, _: R) -> Self::Response {
             let mut message = Message::new();

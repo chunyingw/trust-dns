@@ -73,7 +73,7 @@ impl TlsStreamBuilder {
         }
     }
 
-    /// Add a custom trusted peer certificate or certificate auhtority.
+    /// Add a custom trusted peer certificate or certificate authority.
     ///
     /// If this is the 'client' then the 'server' must have it associated as it's `identity`, or have had the `identity` signed by this certificate.
     pub fn add_ca(&mut self, ca: Certificate) {
@@ -116,7 +116,7 @@ impl TlsStreamBuilder {
         name_server: SocketAddr,
         dns_name: String,
     ) -> (
-        Box<Future<Item = TlsStream, Error = io::Error> + Send>,
+        Box<dyn Future<Item = TlsStream, Error = io::Error> + Send>,
         BufStreamHandle,
     ) {
         let (message_sender, outbound_messages) = unbounded();

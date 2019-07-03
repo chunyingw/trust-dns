@@ -148,7 +148,7 @@ impl Authority for FileAuthority {
     /// * `rtype` - The `RecordType`, to lookup. `RecordType::ANY` will return all records matching
     ///             `name`. `RecordType::AXFR` will return all record types except `RecordType::SOA`
     ///             due to the requirements that on zone transfers the `RecordType::SOA` must both
-    ///             preceed and follow all other records.
+    ///             precede and follow all other records.
     /// * `is_secure` - If the DO bit is set on the EDNS OPT record, then return RRSIGs as well.
     ///
     /// # Return value
@@ -180,7 +180,7 @@ impl Authority for FileAuthority {
         query: &LowerQuery,
         is_secure: bool,
         supported_algorithms: SupportedAlgorithms,
-    ) -> Box<Future<Item = Self::Lookup, Error = LookupError> + Send> {
+    ) -> Box<dyn Future<Item = Self::Lookup, Error = LookupError> + Send> {
         self.0.search(query, is_secure, supported_algorithms)
     }
 
@@ -208,7 +208,7 @@ impl Authority for FileAuthority {
 
     /// Returns the SOA of the authority.
     ///
-    /// *Note*: This will only return the SOA, if this is fullfilling a request, a standard lookup
+    /// *Note*: This will only return the SOA, if this is fulfilling a request, a standard lookup
     ///  should be used, see `soa_secure()`, which will optionally return RRSIGs.
     fn soa(&self) -> Self::LookupFuture {
         self.0.soa()

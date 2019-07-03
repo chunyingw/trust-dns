@@ -51,7 +51,7 @@ pub enum KeyPair<K> {
     /// RSA keypair, supported by OpenSSL
     #[cfg(feature = "openssl")]
     RSA(PKey<K>),
-    /// Ellyptic curve keypair, supported by OpenSSL
+    /// Elliptic curve keypair, supported by OpenSSL
     #[cfg(feature = "openssl")]
     EC(PKey<K>),
     #[cfg(not(feature = "openssl"))]
@@ -60,7 +60,7 @@ pub enum KeyPair<K> {
     /// *ring* ECDSA keypair
     #[cfg(feature = "ring")]
     ECDSA(EcdsaKeyPair),
-    /// ED25519 ecryption and hash defined keypair
+    /// ED25519 encryption and hash defined keypair
     #[cfg(feature = "ring")]
     ED25519(Ed25519KeyPair),
 }
@@ -72,7 +72,7 @@ impl<K> KeyPair<K> {
         PKey::from_rsa(rsa).map(KeyPair::RSA).map_err(Into::into)
     }
 
-    /// Given a know pkey of an RSA key, return the wrapped keypair
+    /// Given a known pkey of an RSA key, return the wrapped keypair
     #[cfg(feature = "openssl")]
     pub fn from_rsa_pkey(pkey: PKey<K>) -> Self {
         KeyPair::RSA(pkey)
@@ -86,7 +86,7 @@ impl<K> KeyPair<K> {
             .map_err(Into::into)
     }
 
-    /// Given a know pkey of an EC key, return the wrapped keypair
+    /// Given a known pkey of an EC key, return the wrapped keypair
     #[cfg(feature = "openssl")]
     pub fn from_ec_pkey(pkey: PKey<K>) -> Self {
         KeyPair::EC(pkey)
@@ -445,6 +445,9 @@ impl KeyPair<Private> {
     /// RSA keys are hardcoded to 2048bits at the moment. Other keys have predefined sizes.
     pub fn generate(algorithm: Algorithm) -> DnsSecResult<Self> {
         match algorithm {
+            Algorithm::Unknown(_) => { 
+                Err(DnsSecErrorKind::Message("unknown algorithm").into())
+            }
             #[cfg(feature = "openssl")]
             Algorithm::RSASHA1
             | Algorithm::RSASHA1NSEC3SHA1
@@ -479,6 +482,9 @@ impl KeyPair<Private> {
     #[cfg(feature = "ring")]
     pub fn generate_pkcs8(algorithm: Algorithm) -> DnsSecResult<Vec<u8>> {
         match algorithm {
+            Algorithm::Unknown(_) => { 
+                Err(DnsSecErrorKind::Message("unknown algorithm").into())
+            }
             #[cfg(feature = "openssl")]
             Algorithm::RSASHA1
             | Algorithm::RSASHA1NSEC3SHA1
