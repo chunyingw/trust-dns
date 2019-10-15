@@ -105,10 +105,7 @@ where
 {
     let name = Name::from_ascii("WWW.example.com").unwrap();
 
-    let response = client.query(&name, DNSClass::IN, RecordType::A);
-    assert!(response.is_ok(), "query failed: {}", response.unwrap_err());
-
-    let response = response.unwrap();
+    let response = client.query(&name, DNSClass::IN, RecordType::A).expect("Query failed");
 
     println!("response records: {:?}", response);
     assert!(response
@@ -164,16 +161,8 @@ where
     // env_logger::try_init().ok();
 
     let name = Name::from_str("www.example.com").unwrap();
-    let response = client.secure_query(&name, DNSClass::IN, RecordType::A);
 
-    assert!(
-        response.is_ok(),
-        "query for {} failed: {}",
-        name,
-        response.unwrap_err()
-    );
-
-    let response = response.unwrap();
+    let response = client.secure_query(&name, DNSClass::IN, RecordType::A).expect("Query failed");
 
     println!("response records: {:?}", response);
     assert!(response.edns().expect("edns not here").dnssec_ok());
@@ -313,10 +302,8 @@ where
 {
     let name = Name::from_str("none.example.com").unwrap();
 
-    let response = client.secure_query(&name, DNSClass::IN, RecordType::A);
-    assert!(response.is_ok(), "query failed: {}", response.unwrap_err());
+    let response = client.secure_query(&name, DNSClass::IN, RecordType::A).expect("Query failed");
 
-    let response = response.unwrap();
     assert_eq!(response.response_code(), ResponseCode::NXDomain);
 }
 
@@ -331,10 +318,8 @@ fn test_nsec_query_type() {
     let conn = TcpClientConnection::new(addr).unwrap();
     let client = SecureSyncClient::new(conn).build();
 
-    let response = client.secure_query(&name, DNSClass::IN, RecordType::NS);
-    assert!(response.is_ok(), "query failed: {}", response.unwrap_err());
+    let response = client.secure_query(&name, DNSClass::IN, RecordType::NS).expect("Query failed");
 
-    let response = response.unwrap();
     // TODO: it would be nice to verify that the NSEC records were validated...
     assert_eq!(response.response_code(), ResponseCode::NoError);
     assert!(response.answers().is_empty());

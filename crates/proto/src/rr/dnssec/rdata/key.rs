@@ -851,12 +851,9 @@ pub fn test() {
     println!("bytes: {:?}", bytes);
 
     let mut decoder: BinDecoder = BinDecoder::new(bytes);
-    let read_rdata = read(&mut decoder, Restrict::new(bytes.len() as u16));
-    assert!(
-        read_rdata.is_ok(),
-        format!("error decoding: {:?}", read_rdata.unwrap_err())
-    );
-    assert_eq!(rdata, read_rdata.unwrap());
+    let restrict = Restrict::new(bytes.len() as u16);
+    let read_rdata = read(&mut decoder, restrict).expect("Decoding error");
+    assert_eq!(rdata, read_rdata);
     // #[cfg(any(feature = "openssl", feature = "ring"))]
     // assert!(rdata
     //             .to_digest(&Name::parse("www.example.com.", None).unwrap(),

@@ -309,6 +309,7 @@ impl InMemoryAuthority {
         }
     }
 
+    #[cfg(feature = "sqlite")]
     pub(crate) fn increment_soa_serial(&mut self) -> u32 {
         // we'll remove the SOA and then replace it
         let rr_key = RrKey::new(self.origin.clone(), RecordType::SOA);
@@ -1030,8 +1031,8 @@ impl Authority for InMemoryAuthority {
             .get(&rr_key)
             .map(|rr_set| LookupRecords::new(is_secure, supported_algorithms, rr_set.clone()));
 
-        if no_data.is_some() {
-            return future::result(Ok(no_data.unwrap().into()));
+        if let Some(x) = no_data {
+            return future::result(Ok(x.into()));
         }
 
         let get_closest_nsec = |name: &LowerName| -> Option<Arc<RecordSet>> {

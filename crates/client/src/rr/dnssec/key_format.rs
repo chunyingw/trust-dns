@@ -384,14 +384,14 @@ mod tests {
             encode,
             decode
         );
-        let encoded = key_format.generate_and_encode(algorithm, en_pass);
+        let encoded_rslt = key_format.generate_and_encode(algorithm, en_pass);
 
         if encode {
-            assert!(encoded.is_ok(), format!("{}", encoded.unwrap_err()));
-            let decoded = key_format.decode_key(&encoded.unwrap(), de_pass, algorithm);
+            let encoded = encoded_rslt.expect("Encoding error");
+            let decoded = key_format.decode_key(&encoded, de_pass, algorithm);
             assert_eq!(decoded.is_ok(), decode);
         } else {
-            assert!(encoded.is_err());
+            assert!(encoded_rslt.is_err());
         }
     }
 }
