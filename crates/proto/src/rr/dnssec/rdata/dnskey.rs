@@ -345,7 +345,8 @@ pub fn read(decoder: &mut BinDecoder, rdata_length: Restrict<u16>) -> ProtoResul
             // protocol is defined to only be '3' right now
 
             *protocol == 3
-        }).map_err(|protocol| ProtoError::from(ProtoErrorKind::DnsKeyProtocolNot3(protocol)))?;
+        })
+        .map_err(|protocol| ProtoError::from(ProtoErrorKind::DnsKeyProtocolNot3(protocol)))?;
 
     let algorithm: Algorithm = Algorithm::read(decoder)?;
 
@@ -391,6 +392,8 @@ pub fn emit(encoder: &mut BinEncoder, rdata: &DNSKEY) -> ProtoResult<()> {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::dbg_macro, clippy::print_stdout)]
+
     use super::*;
 
     #[test]
@@ -412,16 +415,16 @@ mod tests {
         println!("bytes: {:?}", bytes);
 
         let mut decoder: BinDecoder = BinDecoder::new(bytes);
-        let restrict = Restrict::new(bytes.len() as u16);
-        let read_rdata = read(&mut decoder, restrict).expect("Decoding error");
+        let read_rdata = read(&mut decoder, Restrict::new(bytes.len() as u16));
+        let read_rdata = read_rdata.expect("error decoding");
+
         assert_eq!(rdata, read_rdata);
-        assert!(
-            rdata
-                .to_digest(
-                    &Name::parse("www.example.com.", None).unwrap(),
-                    DigestType::SHA256
-                ).is_ok()
-        );
+        assert!(rdata
+            .to_digest(
+                &Name::parse("www.example.com.", None).unwrap(),
+                DigestType::SHA256
+            )
+            .is_ok());
     }
 
     #[test]

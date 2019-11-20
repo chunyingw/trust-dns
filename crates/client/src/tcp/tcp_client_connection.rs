@@ -11,17 +11,17 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use tokio_tcp::TcpStream;
 use proto::tcp::{TcpClientConnect, TcpClientStream};
 use proto::xfer::{DnsMultiplexer, DnsMultiplexerConnect, DnsRequestSender};
+use tokio_net::tcp::TcpStream;
 
-use client::ClientConnection;
-use error::*;
-use rr::dnssec::Signer;
+use crate::client::ClientConnection;
+use crate::error::*;
+use crate::rr::dnssec::Signer;
 
 /// Tcp client connection
 ///
-/// Use with `trust_dns::client::Client` impls
+/// Use with `trust_dns_client::client::Client` impls
 #[derive(Clone)]
 pub struct TcpClientConnection {
     name_server: SocketAddr,
@@ -62,7 +62,8 @@ impl TcpClientConnection {
 impl ClientConnection for TcpClientConnection {
     type Sender = DnsMultiplexer<TcpClientStream<TcpStream>, Signer>;
     type Response = <Self::Sender as DnsRequestSender>::DnsResponseFuture;
-    type SenderFuture = DnsMultiplexerConnect<TcpClientConnect<TcpStream>, TcpClientStream<TcpStream>, Signer>;
+    type SenderFuture =
+        DnsMultiplexerConnect<TcpClientConnect<TcpStream>, TcpClientStream<TcpStream>, Signer>;
 
     fn new_stream(&self, signer: Option<Arc<Signer>>) -> Self::SenderFuture {
         let (tcp_client_stream, handle) =

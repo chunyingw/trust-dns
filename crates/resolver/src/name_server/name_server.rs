@@ -7,10 +7,11 @@
 
 use std::cmp::Ordering;
 use std::fmt::{self, Debug, Formatter};
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
-use futures::{future, Future};
+use futures::{future, Future, TryFutureExt};
 
 use proto::error::{ProtoError, ProtoResult};
 #[cfg(feature = "mdns")]
@@ -19,11 +20,11 @@ use proto::op::ResponseCode;
 use proto::xfer::{DnsHandle, DnsRequest, DnsResponse};
 
 #[cfg(feature = "mdns")]
-use config::Protocol;
-use config::{NameServerConfig, ResolverOpts};
-use name_server::NameServerState;
-use name_server::NameServerStats;
-use name_server::{ConnectionHandle, ConnectionProvider, StandardConnection};
+use crate::config::Protocol;
+use crate::config::{NameServerConfig, ResolverOpts};
+use crate::name_server::NameServerState;
+use crate::name_server::NameServerStats;
+use crate::name_server::{ConnectionHandle, ConnectionProvider, StandardConnection};
 
 /// Specifies the details of a remote NameServer used for lookups
 #[derive(Clone)]
@@ -112,14 +113,14 @@ where
     C: DnsHandle,
     P: ConnectionProvider<ConnHandle = C>,
 {
-    type Response = Box<dyn Future<Item = DnsResponse, Error = ProtoError> + Send>;
+    type Response = Pin<Box<dyn Future<Output = Result<DnsResponse, ProtoError>> + Send + Unpin>>;
 
     fn is_verifying_dnssec(&self) -> bool {
         self.options.validate
     }
 
     // TODO: there needs to be some way of customizing the connection based on EDNS options from the server side...
-    fn send<R: Into<DnsRequest>>(&mut self, request: R) -> Self::Response {
+    fn send<R: Into<DnsRequest> + Unpin + Send + 'static>(&mut self, request: R) -> Self::Response {
         let distrust_nx_responses = self.options.distrust_nx_responses;
 
         // grab a reference to the stats for this NameServer
@@ -131,11 +132,11 @@ where
         // if state is failed, return future::err(), unless retry delay expired...
         let client = match self.connected_mut_client() {
             Ok(client) => client,
-            Err(e) => return Box::new(future::err(e)) as Self::Response,
+            Err(e) => return Box::pin(future::err(e)) as Self::Response,
         };
 
         // Because a Poisoned lock error could have occurred, make sure to create a new Mutex...
-        Box::new(
+        Box::pin(
             client
                 .send(request)
                 .and_then(move |response| {
@@ -193,10 +194,7 @@ impl<C: DnsHandle, P: ConnectionProvider<ConnHandle = C>> Ord for NameServer<C, 
         //   this will prefer established connections, we should try other connections after
         //   some number to make sure that all are used. This is more important for when
         //   latency is started to be used.
-        match self
-            .state
-            .cmp(&other.state)
-        {
+        match self.state.cmp(&other.state) {
             Ordering::Equal => (),
             o => {
                 return o;
@@ -233,6 +231,8 @@ where
         socket_addr: *MDNS_IPV4,
         protocol: Protocol::Mdns,
         tls_dns_name: None,
+        #[cfg(feature = "dns-over-rustls")]
+        tls_config: None,
     };
     NameServer::new_with_provider(config, options, conn_provider)
 }
@@ -244,7 +244,7 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::time::Duration;
 
-    use futures::future;
+    use futures::{future, FutureExt};
     use tokio::runtime::current_thread::Runtime;
 
     use proto::op::{Query, ResponseCode};
@@ -252,7 +252,7 @@ mod tests {
     use proto::xfer::{DnsHandle, DnsRequestOptions};
 
     use super::*;
-    use config::Protocol;
+    use crate::config::Protocol;
 
     #[test]
     fn test_name_server() {
@@ -262,18 +262,17 @@ mod tests {
             socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)), 53),
             protocol: Protocol::Udp,
             tls_dns_name: None,
+            #[cfg(feature = "dns-over-rustls")]
+            tls_config: None,
         };
         let mut io_loop = Runtime::new().unwrap();
-        let name_server = future::lazy(|| {
-            future::ok(NameServer::<_, StandardConnection>::new(
-                config,
-                ResolverOpts::default(),
-            ))
+        let name_server = future::lazy(|_| {
+            NameServer::<_, StandardConnection>::new(config, ResolverOpts::default())
         });
 
         let name = Name::parse("www.example.com.", None).unwrap();
         let response = io_loop
-            .block_on(name_server.and_then(|mut name_server| {
+            .block_on(name_server.then(|mut name_server| {
                 name_server.lookup(
                     Query::query(name.clone(), RecordType::A),
                     DnsRequestOptions::default(),
@@ -291,14 +290,16 @@ mod tests {
             socket_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 252)), 252),
             protocol: Protocol::Udp,
             tls_dns_name: None,
+            #[cfg(feature = "dns-over-rustls")]
+            tls_config: None,
         };
         let mut io_loop = Runtime::new().unwrap();
         let name_server =
-            future::lazy(|| future::ok(NameServer::<_, StandardConnection>::new(config, options)));
+            future::lazy(|_| NameServer::<_, StandardConnection>::new(config, options));
 
         let name = Name::parse("www.example.com.", None).unwrap();
         assert!(io_loop
-            .block_on(name_server.and_then(|mut name_server| name_server.lookup(
+            .block_on(name_server.then(|mut name_server| name_server.lookup(
                 Query::query(name.clone(), RecordType::A),
                 DnsRequestOptions::default()
             )))

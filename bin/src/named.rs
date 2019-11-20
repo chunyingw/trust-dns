@@ -21,6 +21,8 @@
 //!    -p PORT, --port=PORT    Override the listening port
 //!    --tls-port=PORT         Override the listening port for TLS connections
 //! ```
+
+#![warn(missing_docs, clippy::dbg_macro, clippy::unimplemented)]
 #![recursion_limit = "128"]
 
 extern crate chrono;
@@ -33,37 +35,36 @@ extern crate log;
 extern crate rustls;
 extern crate tokio;
 extern crate tokio_executor;
-extern crate tokio_tcp;
-extern crate tokio_udp;
-extern crate trust_dns;
+extern crate tokio_net;
+extern crate trust_dns_client;
 #[cfg(feature = "dns-over-openssl")]
 extern crate trust_dns_openssl;
 #[cfg(feature = "dns-over-rustls")]
 extern crate trust_dns_rustls;
 extern crate trust_dns_server;
 
-use std::io;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 
 use clap::{Arg, ArgMatches};
 use futures::{future, Future};
 use tokio::runtime::Runtime;
 use tokio::runtime::TaskExecutor;
-use tokio_tcp::TcpListener;
-use tokio_udp::UdpSocket;
+use tokio_net::tcp::TcpListener;
+use tokio_net::udp::UdpSocket;
 
 #[cfg(feature = "dnssec")]
-use trust_dns::rr::rdata::key::KeyUsage;
-use trust_dns::rr::Name;
+use trust_dns_client::rr::rdata::key::KeyUsage;
+use trust_dns_client::rr::Name;
 use trust_dns_server::authority::{AuthorityObject, Catalog, ZoneType};
-#[cfg(any(feature = "dns-over-tls", feature = "dnssec"))]
+#[cfg(feature = "dns-over-tls")]
 use trust_dns_server::config::dnssec::{self, TlsCertConfig};
 use trust_dns_server::config::{Config, ZoneConfig};
 use trust_dns_server::logger;
 use trust_dns_server::server::ServerFuture;
 use trust_dns_server::store::file::{FileAuthority, FileConfig};
-#[cfg(feature = "trust-dns-resolver")]
+#[cfg(feature = "resolver")]
 use trust_dns_server::store::forwarder::ForwardAuthority;
 #[cfg(feature = "sqlite")]
 use trust_dns_server::store::sqlite::{SqliteAuthority, SqliteConfig};
@@ -82,6 +83,7 @@ fn load_zone(
     let zone_path: Option<String> = zone_config.file.clone();
     let zone_type: ZoneType = zone_config.get_zone_type();
     let is_axfr_allowed = zone_config.is_axfr_allowed();
+    #[allow(unused_variables)]
     let is_dnssec_enabled = zone_config.is_dnssec_enabled();
 
     if zone_config.is_update_allowed() {
@@ -119,16 +121,11 @@ fn load_zone(
             )
             .map(Box::new)?
         }
-        #[cfg(feature = "trust-dns-resolver")]
+        #[cfg(feature = "resolver")]
         Some(StoreConfig::Forward(ref config)) => {
-            use futures::future::Executor;
-
             let (forwarder, bg) = ForwardAuthority::try_from_config(zone_name, zone_type, config)?;
 
-            executor
-                .execute(bg)
-                .expect("failed to background forwarder");
-
+            executor.spawn(bg);
             Box::new(forwarder)
         }
         #[cfg(feature = "sqlite")]
@@ -350,7 +347,7 @@ pub fn main() {
         logger::default();
     }
 
-    info!("Trust-DNS {} starting", trust_dns::version());
+    info!("Trust-DNS {} starting", trust_dns_client::version());
     // start up the server for listening
 
     let flag_config = args.flag_config.clone();
@@ -365,7 +362,7 @@ pub fn main() {
         .map(PathBuf::from)
         .unwrap_or_else(|| directory_config.clone());
 
-    let mut io_loop = Runtime::new().expect("error when creating tokio Runtime");
+    let io_loop = Runtime::new().expect("error when creating tokio Runtime");
     let executor = io_loop.executor();
     let mut catalog: Catalog = Catalog::new();
     // configure our server based on the config_path
@@ -401,19 +398,27 @@ pub fn main() {
         .collect();
     let udp_sockets: Vec<UdpSocket> = sockaddrs
         .iter()
-        .map(|x| UdpSocket::bind(x).unwrap_or_else(|_| panic!("could not bind to udp: {}", x)))
+        .map(|x| {
+            io_loop
+                .block_on(UdpSocket::bind(x))
+                .unwrap_or_else(|_| panic!("could not bind to udp: {}", x))
+        })
         .collect();
     let tcp_listeners: Vec<TcpListener> = sockaddrs
         .iter()
-        .map(|x| TcpListener::bind(x).unwrap_or_else(|_| panic!("could not bind to tcp: {}", x)))
+        .map(|x| {
+            io_loop
+                .block_on(TcpListener::bind(x))
+                .unwrap_or_else(|_| panic!("could not bind to tcp: {}", x))
+        })
         .collect();
 
     // now, run the server, based on the config
     #[cfg_attr(not(feature = "dns-over-tls"), allow(unused_mut))]
     let mut server = ServerFuture::new(catalog);
 
-    let server_future: Box<dyn Future<Item = (), Error = ()> + Send> =
-        Box::new(future::lazy(move || {
+    let server_future: Pin<Box<dyn Future<Output = ()> + Send>> =
+        Box::pin(future::lazy(move |_| {
             // load all the listeners
             for udp_socket in udp_sockets {
                 info!("listening for UDP on {:?}", udp_socket);
@@ -465,20 +470,13 @@ pub fn main() {
             // Ideally the processing would be n-threads for receiving, which hand off to m-threads for
             //  request handling. It would generally be the case that n <= m.
             info!("Server starting up");
-            future::empty()
         }));
 
-    if let Err(e) = io_loop.block_on(server_future.map_err(|_| {
-        io::Error::new(
-            io::ErrorKind::Interrupted,
-            "Server stopping due to interruption",
-        )
-    })) {
-        error!("failed to listen: {}", e);
-    }
+    io_loop.spawn(server_future);
+    io_loop.shutdown_on_idle();
 
     // we're exiting for some reason...
-    info!("Trust-DNS {} stopping", trust_dns::version());
+    info!("Trust-DNS {} stopping", trust_dns_client::version());
 }
 
 #[cfg(feature = "dns-over-tls")]
@@ -490,6 +488,9 @@ fn config_tls(
     zone_dir: &Path,
     listen_addrs: &[IpAddr],
 ) {
+    use futures::executor::block_on;
+    use futures::TryFutureExt;
+
     let tls_listen_port: u16 = args
         .flag_tls_port
         .unwrap_or_else(|| config.get_tls_listen_port());
@@ -499,7 +500,11 @@ fn config_tls(
         .collect();
     let tls_listeners: Vec<TcpListener> = tls_sockaddrs
         .iter()
-        .map(|x| TcpListener::bind(x).unwrap_or_else(|_| panic!("could not bind to tls: {}", x)))
+        .map(|x| {
+            block_on(
+                TcpListener::bind(x).unwrap_or_else(|_| panic!("could not bind to tls: {}", x)),
+            )
+        })
         .collect();
     if tls_listeners.is_empty() {
         warn!("a tls certificate was specified, but no TLS addresses configured to listen on");
@@ -530,6 +535,9 @@ fn config_https(
     zone_dir: &Path,
     listen_addrs: &[IpAddr],
 ) {
+    use futures::executor::block_on;
+    use futures::TryFutureExt;
+
     let https_listen_port: u16 = args
         .flag_https_port
         .unwrap_or_else(|| config.get_https_listen_port());
@@ -539,7 +547,11 @@ fn config_https(
         .collect();
     let https_listeners: Vec<TcpListener> = https_sockaddrs
         .iter()
-        .map(|x| TcpListener::bind(x).unwrap_or_else(|_| panic!("could not bind to tls: {}", x)))
+        .map(|x| {
+            block_on(
+                TcpListener::bind(x).unwrap_or_else(|_| panic!("could not bind to tls: {}", x)),
+            )
+        })
         .collect();
     if https_listeners.is_empty() {
         warn!("a tls certificate was specified, but no HTTPS addresses configured to listen on");

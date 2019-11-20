@@ -2,13 +2,14 @@ extern crate chrono;
 extern crate env_logger;
 extern crate futures;
 extern crate openssl;
-extern crate trust_dns;
+extern crate trust_dns_client;
 extern crate trust_dns_integration;
 extern crate trust_dns_proto;
 extern crate trust_dns_rustls;
 extern crate trust_dns_server;
 
 use std::net::*;
+use std::pin::Pin;
 #[cfg(feature = "dnssec")]
 use std::str::FromStr;
 use std::sync::{Arc, Mutex};
@@ -18,16 +19,16 @@ use chrono::Duration;
 use futures::Future;
 
 #[cfg(feature = "dnssec")]
-use trust_dns::client::SecureSyncClient;
+use trust_dns_client::client::SecureSyncClient;
 #[allow(deprecated)]
-use trust_dns::client::{Client, ClientConnection, SyncClient};
-use trust_dns::error::ClientErrorKind;
-use trust_dns::rr::dnssec::Signer;
+use trust_dns_client::client::{Client, ClientConnection, SyncClient};
+use trust_dns_client::error::ClientErrorKind;
+use trust_dns_client::rr::dnssec::Signer;
 #[cfg(feature = "dnssec")]
-use trust_dns::rr::Record;
-use trust_dns::rr::{DNSClass, Name, RData, RecordType};
-use trust_dns::tcp::TcpClientConnection;
-use trust_dns::udp::UdpClientConnection;
+use trust_dns_client::rr::Record;
+use trust_dns_client::rr::{DNSClass, Name, RData, RecordType};
+use trust_dns_client::tcp::TcpClientConnection;
+use trust_dns_client::udp::UdpClientConnection;
 use trust_dns_integration::authority::create_example;
 use trust_dns_integration::{NeverReturnsClientConnection, TestClientStream};
 use trust_dns_proto::error::ProtoError;
@@ -48,11 +49,12 @@ impl TestClientConnection {
     }
 }
 
+#[allow(clippy::type_complexity)]
 impl ClientConnection for TestClientConnection {
     type Sender = DnsMultiplexer<TestClientStream, Signer>;
     type Response = <Self::Sender as DnsRequestSender>::DnsResponseFuture;
     type SenderFuture = DnsMultiplexerConnect<
-        Box<dyn Future<Item = TestClientStream, Error = ProtoError> + Send>,
+        Pin<Box<dyn Future<Output = Result<TestClientStream, ProtoError>> + Send>>,
         TestClientStream,
         Signer,
     >;
@@ -60,7 +62,7 @@ impl ClientConnection for TestClientConnection {
     fn new_stream(&self, signer: Option<Arc<Signer>>) -> Self::SenderFuture {
         let (client_stream, handle) = TestClientStream::new(self.catalog.clone());
 
-        DnsMultiplexer::new(Box::new(client_stream), Box::new(handle), signer)
+        DnsMultiplexer::new(Box::pin(client_stream), Box::new(handle), signer)
     }
 }
 
@@ -105,7 +107,9 @@ where
 {
     let name = Name::from_ascii("WWW.example.com").unwrap();
 
-    let response = client.query(&name, DNSClass::IN, RecordType::A).expect("Query failed");
+    let response = client
+        .query(&name, DNSClass::IN, RecordType::A)
+        .expect("Query failed");
 
     println!("response records: {:?}", response);
     assert!(response
@@ -162,7 +166,9 @@ where
 
     let name = Name::from_str("www.example.com").unwrap();
 
-    let response = client.secure_query(&name, DNSClass::IN, RecordType::A).expect("Query failed");
+    let response = client
+        .secure_query(&name, DNSClass::IN, RecordType::A)
+        .expect("Query failed");
 
     println!("response records: {:?}", response);
     assert!(response.edns().expect("edns not here").dnssec_ok());
@@ -302,7 +308,9 @@ where
 {
     let name = Name::from_str("none.example.com").unwrap();
 
-    let response = client.secure_query(&name, DNSClass::IN, RecordType::A).expect("Query failed");
+    let response = client
+        .secure_query(&name, DNSClass::IN, RecordType::A)
+        .expect("Query failed");
 
     assert_eq!(response.response_code(), ResponseCode::NXDomain);
 }
@@ -318,7 +326,9 @@ fn test_nsec_query_type() {
     let conn = TcpClientConnection::new(addr).unwrap();
     let client = SecureSyncClient::new(conn).build();
 
-    let response = client.secure_query(&name, DNSClass::IN, RecordType::NS).expect("Query failed");
+    let response = client
+        .secure_query(&name, DNSClass::IN, RecordType::NS)
+        .expect("Query failed");
 
     // TODO: it would be nice to verify that the NSEC records were validated...
     assert_eq!(response.response_code(), ResponseCode::NoError);
@@ -361,10 +371,10 @@ fn test_nsec_query_type() {
 // }
 
 #[allow(deprecated)]
-#[cfg(feature = "dnssec")]
+#[cfg(all(feature = "dnssec", feature = "sqlite"))]
 fn create_sig0_ready_client(mut catalog: Catalog) -> (SyncClient<TestClientConnection>, Name) {
     use openssl::rsa::Rsa;
-    use trust_dns::rr::dnssec::{Algorithm, KeyPair};
+    use trust_dns_client::rr::dnssec::{Algorithm, KeyPair};
     use trust_dns_proto::rr::dnssec::rdata::{DNSSECRData, DNSSECRecordType, KEY};
     use trust_dns_server::store::sqlite::SqliteAuthority;
 
@@ -407,7 +417,7 @@ fn create_sig0_ready_client(mut catalog: Catalog) -> (SyncClient<TestClientConne
     (client, origin.into())
 }
 
-#[cfg(feature = "dnssec")]
+#[cfg(all(feature = "dnssec", feature = "sqlite"))]
 #[test]
 fn test_create() {
     let catalog = Catalog::new();
@@ -440,16 +450,14 @@ fn test_create() {
     assert_eq!(result.response_code(), ResponseCode::YXRRSet);
 
     // will fail if already set and not the same value.
-    let mut record = record.clone();
+    let mut record = record;
     record.set_rdata(RData::A(Ipv4Addr::new(101, 11, 101, 11)));
 
-    let result = client
-        .create(record.clone(), origin.clone())
-        .expect("create failed");
+    let result = client.create(record, origin).expect("create failed");
     assert_eq!(result.response_code(), ResponseCode::YXRRSet);
 }
 
-#[cfg(feature = "dnssec")]
+#[cfg(all(feature = "dnssec", feature = "sqlite"))]
 #[test]
 fn test_append() {
     let catalog = Catalog::new();
@@ -484,7 +492,7 @@ fn test_append() {
     assert_eq!(result.answers()[0], record);
 
     // will fail if already set and not the same value.
-    let mut record = record.clone();
+    let mut record = record;
     record.set_rdata(RData::A(Ipv4Addr::new(101, 11, 101, 11)));
 
     let result = client
@@ -517,7 +525,7 @@ fn test_append() {
 
     // show that appending the same thing again is ok, but doesn't add any records
     let result = client
-        .append(record.clone(), origin.clone(), true)
+        .append(record.clone(), origin, true)
         .expect("create failed");
     assert_eq!(result.response_code(), ResponseCode::NoError);
 
@@ -528,7 +536,7 @@ fn test_append() {
     assert_eq!(result.answers().len(), 2);
 }
 
-#[cfg(feature = "dnssec")]
+#[cfg(all(feature = "dnssec", feature = "sqlite"))]
 #[test]
 fn test_compare_and_swap() {
     let catalog = Catalog::new();
@@ -575,7 +583,7 @@ fn test_compare_and_swap() {
     new.set_rdata(RData::A(Ipv4Addr::new(102, 12, 102, 12)));
 
     let result = client
-        .compare_and_swap(current, new.clone(), origin.clone())
+        .compare_and_swap(current, new.clone(), origin)
         .expect("compare_and_swap failed");
     assert_eq!(result.response_code(), ResponseCode::NXRRSet);
 
@@ -594,7 +602,7 @@ fn test_compare_and_swap() {
         }));
 }
 
-#[cfg(feature = "dnssec")]
+#[cfg(all(feature = "dnssec", feature = "sqlite"))]
 #[test]
 fn test_delete_by_rdata() {
     let catalog = Catalog::new();
@@ -620,7 +628,7 @@ fn test_delete_by_rdata() {
         .expect("create failed");
     assert_eq!(result.response_code(), ResponseCode::NoError);
 
-    let mut record = record.clone();
+    let mut record = record;
     record.set_rdata(RData::A(Ipv4Addr::new(101, 11, 101, 11)));
     let result = client
         .append(record.clone(), origin.clone(), true)
@@ -629,7 +637,7 @@ fn test_delete_by_rdata() {
 
     // verify record contents
     let result = client
-        .delete_by_rdata(record.clone(), origin.clone())
+        .delete_by_rdata(record.clone(), origin)
         .expect("delete failed");
     assert_eq!(result.response_code(), ResponseCode::NoError);
 
@@ -648,7 +656,7 @@ fn test_delete_by_rdata() {
         }));
 }
 
-#[cfg(feature = "dnssec")]
+#[cfg(all(feature = "dnssec", feature = "sqlite"))]
 #[test]
 fn test_delete_rrset() {
     let catalog = Catalog::new();
@@ -674,7 +682,7 @@ fn test_delete_rrset() {
         .expect("create failed");
     assert_eq!(result.response_code(), ResponseCode::NoError);
 
-    let mut record = record.clone();
+    let mut record = record;
     record.set_rdata(RData::A(Ipv4Addr::new(101, 11, 101, 11)));
     let result = client
         .append(record.clone(), origin.clone(), true)
@@ -683,7 +691,7 @@ fn test_delete_rrset() {
 
     // verify record contents
     let result = client
-        .delete_rrset(record.clone(), origin.clone())
+        .delete_rrset(record.clone(), origin)
         .expect("delete failed");
     assert_eq!(result.response_code(), ResponseCode::NoError);
 
@@ -694,7 +702,7 @@ fn test_delete_rrset() {
     assert_eq!(result.answers().len(), 0);
 }
 
-#[cfg(feature = "dnssec")]
+#[cfg(all(feature = "dnssec", feature = "sqlite"))]
 #[test]
 fn test_delete_all() {
     let catalog = Catalog::new();
@@ -720,7 +728,7 @@ fn test_delete_all() {
         .expect("create failed");
     assert_eq!(result.response_code(), ResponseCode::NoError);
 
-    let mut record = record.clone();
+    let mut record = record;
     record.set_rr_type(RecordType::AAAA);
     record.set_rdata(RData::AAAA(Ipv6Addr::new(1, 2, 3, 4, 5, 6, 7, 8)));
     let result = client
@@ -730,7 +738,7 @@ fn test_delete_all() {
 
     // verify record contents
     let result = client
-        .delete_all(record.name().clone(), origin.clone(), DNSClass::IN)
+        .delete_all(record.name().clone(), origin, DNSClass::IN)
         .expect("delete failed");
     assert_eq!(result.response_code(), ResponseCode::NoError);
 

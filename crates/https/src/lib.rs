@@ -6,7 +6,12 @@
 // copied, modified, or distributed except according to those terms.
 
 //! TLS protocol related components for DNS over TLS
-#![warn(missing_docs)]
+#![warn(
+    missing_docs,
+    clippy::dbg_macro,
+    clippy::print_stdout,
+    clippy::unimplemented
+)]
 
 extern crate bytes;
 extern crate data_encoding;
@@ -19,9 +24,8 @@ extern crate log;
 extern crate failure;
 extern crate rustls;
 extern crate tokio_executor;
-extern crate tokio_reactor;
+extern crate tokio_net;
 extern crate tokio_rustls;
-extern crate tokio_tcp;
 extern crate trust_dns_proto;
 extern crate trust_dns_rustls;
 extern crate typed_headers;
@@ -46,6 +50,6 @@ pub use self::error::{Error as HttpsError, Result as HttpsResult};
 
 //pub use self::https_client_connection::{HttpsClientConnection, HttpsClientConnectionBuilder};
 pub use self::https_client_stream::{
-    HttpsClientConnect, HttpsClientStream, HttpsClientStreamBuilder, HttpsSerialResponse,
+    HttpsClientConnect, HttpsClientResponse, HttpsClientStream, HttpsClientStreamBuilder,
 };
 //pub use self::https_stream::{HttpsStream, HttpsStreamBuilder};

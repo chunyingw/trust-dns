@@ -29,7 +29,7 @@ mod none;
 #[cfg(feature = "bind")]
 pub use bind::named_process;
 
-#[cfg(all(feature = "none", not(feature = "bind")))]
+#[cfg(not(feature = "bind"))]
 pub use none::named_process;
 
 fn find_test_port() -> u16 {
@@ -126,7 +126,8 @@ where
                 // stdout().write(b"SRV: ").unwrap();
                 // stdout().write(output.as_bytes()).unwrap();
             }
-        }).expect("no thread available");
+        })
+        .expect("no thread available");
 
     // return handle to child process
     NamedProcess {

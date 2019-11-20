@@ -9,20 +9,23 @@
 
 use std::borrow::Borrow;
 use std::collections::BTreeMap;
+use std::pin::Pin;
 use std::sync::Arc;
 
-use futures::future::{self, Future, FutureResult, IntoFuture};
+use futures::future::{self, Future, TryFutureExt};
 
-use trust_dns::op::{LowerQuery, ResponseCode};
-use trust_dns::rr::dnssec::{DnsSecResult, Signer, SupportedAlgorithms};
-use trust_dns::rr::rdata::key::KEY;
+use trust_dns_client::op::{LowerQuery, ResponseCode};
+use trust_dns_client::rr::dnssec::{DnsSecResult, Signer, SupportedAlgorithms};
+use trust_dns_client::rr::rdata::key::KEY;
 #[cfg(feature = "dnssec")]
-use trust_dns::rr::rdata::DNSSECRData;
-use trust_dns::rr::rdata::DNSSECRecordType;
-use trust_dns::rr::rdata::SOA;
-use trust_dns::rr::{DNSClass, LowerName, Name, RData, Record, RecordSet, RecordType, RrKey};
+use trust_dns_client::rr::rdata::DNSSECRData;
+use trust_dns_client::rr::rdata::DNSSECRecordType;
+use trust_dns_client::rr::rdata::SOA;
+use trust_dns_client::rr::{
+    DNSClass, LowerName, Name, RData, Record, RecordSet, RecordType, RrKey,
+};
 
-use authority::{
+use crate::authority::{
     AnyRecords, AuthLookup, Authority, LookupError, LookupRecords, LookupResult, MessageRequest,
     UpdateResult, ZoneType,
 };
@@ -309,7 +312,7 @@ impl InMemoryAuthority {
         }
     }
 
-    #[cfg(feature = "sqlite")]
+    #[cfg(any(feature = "dnssec", feature = "sqlite"))]
     pub(crate) fn increment_soa_serial(&mut self) -> u32 {
         // we'll remove the SOA and then replace it
         let rr_key = RrKey::new(self.origin.clone(), RecordType::SOA);
@@ -443,7 +446,7 @@ impl InMemoryAuthority {
     /// Dummy implementation for when DNSSEC is disabled.
     #[cfg(feature = "dnssec")]
     fn nsec_zone(&mut self) {
-        use trust_dns::rr::rdata::NSEC;
+        use trust_dns_client::rr::rdata::NSEC;
 
         // only create nsec records for secure zones
         if self.secure_keys.is_empty() {
@@ -532,8 +535,8 @@ impl InMemoryAuthority {
         zone_class: DNSClass,
     ) -> DnsSecResult<()> {
         use chrono::Utc;
-        use trust_dns::rr::dnssec::tbs;
-        use trust_dns::rr::rdata::SIG;
+        use trust_dns_client::rr::dnssec::tbs;
+        use trust_dns_client::rr::rdata::SIG;
 
         let inception = Utc::now();
 
@@ -696,7 +699,7 @@ fn maybe_next_name(
 
 impl Authority for InMemoryAuthority {
     type Lookup = AuthLookup;
-    type LookupFuture = FutureResult<Self::Lookup, LookupError>;
+    type LookupFuture = future::Ready<Result<Self::Lookup, LookupError>>;
 
     /// What type is this zone
     fn zone_type(&self) -> ZoneType {
@@ -794,7 +797,7 @@ impl Authority for InMemoryAuthority {
         query_type: RecordType,
         is_secure: bool,
         supported_algorithms: SupportedAlgorithms,
-    ) -> Self::LookupFuture {
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Lookup, LookupError>> + Send>> {
         // Collect the records from each rr_set
         let (result, additionals): (LookupResult<LookupRecords>, Option<LookupRecords>) =
             match query_type {
@@ -908,13 +911,9 @@ impl Authority for InMemoryAuthority {
                         };
 
                     // map the answer to a result
-                    let answer =
-                        answer.map_or(Err(LookupError::from(ResponseCode::NXDomain)), |rr_set| {
-                            Ok(LookupRecords::new(
-                                is_secure,
-                                supported_algorithms,
-                                rr_set.clone(),
-                            ))
+                    let answer = answer
+                        .map_or(Err(LookupError::from(ResponseCode::NXDomain)), |rr_set| {
+                            Ok(LookupRecords::new(is_secure, supported_algorithms, rr_set))
                         });
 
                     let additionals = additionals
@@ -936,18 +935,18 @@ impl Authority for InMemoryAuthority {
                     .keys()
                     .any(|key| key.name() == name || name.zone_of(key.name()))
                 {
-                    return Err(LookupError::NameExists).into_future();
+                    return Box::pin(future::err(LookupError::NameExists));
                 } else {
-                    return Err(LookupError::from(ResponseCode::NXDomain)).into_future();
+                    return Box::pin(future::err(LookupError::from(ResponseCode::NXDomain)));
                 }
             }
-            Err(e) => return Err(e).into_future(),
+            Err(e) => return Box::pin(future::err(e)),
             o => o,
         };
 
-        result
-            .map(|answers| AuthLookup::answers(answers, additionals))
-            .into_future()
+        Box::pin(future::ready(
+            result.map(|answers| AuthLookup::answers(answers, additionals)),
+        ))
     }
 
     fn search(
@@ -955,7 +954,7 @@ impl Authority for InMemoryAuthority {
         query: &LowerQuery,
         is_secure: bool,
         supported_algorithms: SupportedAlgorithms,
-    ) -> Box<dyn Future<Item = Self::Lookup, Error = LookupError> + Send> {
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Lookup, LookupError>> + Send>> {
         debug!("searching InMemoryAuthority for: {}", query);
 
         let lookup_name = query.name();
@@ -966,43 +965,42 @@ impl Authority for InMemoryAuthority {
         if RecordType::AXFR == record_type {
             // TODO: support more advanced AXFR options
             if !self.is_axfr_allowed() {
-                return Box::new(Err(LookupError::from(ResponseCode::Refused)).into_future());
+                return Box::pin(future::err(LookupError::from(ResponseCode::Refused)));
             }
 
             match self.zone_type() {
                 ZoneType::Master | ZoneType::Slave => (),
                 // TODO: Forward?
-                _ => return Box::new(Err(LookupError::from(ResponseCode::NXDomain)).into_future()),
+                _ => return Box::pin(future::err(LookupError::from(ResponseCode::NXDomain))),
             }
         }
 
         // perform the actual lookup
         match record_type {
             RecordType::SOA => {
-                Box::new(self.lookup(self.origin(), record_type, is_secure, supported_algorithms))
+                Box::pin(self.lookup(self.origin(), record_type, is_secure, supported_algorithms))
             }
             RecordType::AXFR => {
                 // TODO: shouldn't these SOA's be secure? at least the first, perhaps not the last?
-                let lookup = self
+                let lookup = future::try_join3(
                     // TODO: maybe switch this to be an soa_inner type call?
-                    .soa_secure(is_secure, supported_algorithms)
-                    .join3(
-                        self.soa(),
-                        self.lookup(lookup_name, record_type, is_secure, supported_algorithms),
-                    )
-                    .map(|(start_soa, end_soa, records)| match start_soa {
-                        l @ AuthLookup::Empty => l,
-                        start_soa => AuthLookup::AXFR {
-                            start_soa: start_soa.unwrap_records(),
-                            records: records.unwrap_records(),
-                            end_soa: end_soa.unwrap_records(),
-                        },
-                    });
+                    self.soa_secure(is_secure, supported_algorithms),
+                    self.soa(),
+                    self.lookup(lookup_name, record_type, is_secure, supported_algorithms),
+                )
+                .map_ok(|(start_soa, end_soa, records)| match start_soa {
+                    l @ AuthLookup::Empty => l,
+                    start_soa => AuthLookup::AXFR {
+                        start_soa: start_soa.unwrap_records(),
+                        records: records.unwrap_records(),
+                        end_soa: end_soa.unwrap_records(),
+                    },
+                });
 
-                Box::new(lookup)
+                Box::pin(lookup)
             }
             // A standard Lookup path
-            _ => Box::new(self.lookup(lookup_name, record_type, is_secure, supported_algorithms)),
+            _ => Box::pin(self.lookup(lookup_name, record_type, is_secure, supported_algorithms)),
         }
     }
 
@@ -1019,7 +1017,7 @@ impl Authority for InMemoryAuthority {
         name: &LowerName,
         is_secure: bool,
         supported_algorithms: SupportedAlgorithms,
-    ) -> Self::LookupFuture {
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Lookup, LookupError>> + Send>> {
         fn is_nsec_rrset(rr_set: &RecordSet) -> bool {
             rr_set.record_type() == RecordType::DNSSEC(DNSSECRecordType::NSEC)
         }
@@ -1031,8 +1029,8 @@ impl Authority for InMemoryAuthority {
             .get(&rr_key)
             .map(|rr_set| LookupRecords::new(is_secure, supported_algorithms, rr_set.clone()));
 
-        if let Some(x) = no_data {
-            return future::result(Ok(x.into()));
+        if let Some(no_data) = no_data {
+            return Box::pin(future::ready(Ok(no_data.into())));
         }
 
         let get_closest_nsec = |name: &LowerName| -> Option<Arc<RecordSet>> {
@@ -1090,12 +1088,12 @@ impl Authority for InMemoryAuthority {
             (None, None) => vec![],
         };
 
-        future::result(Ok(LookupRecords::many(
+        Box::pin(future::ready(Ok(LookupRecords::many(
             is_secure,
             supported_algorithms,
             proofs,
         )
-        .into()))
+        .into())))
     }
 
     #[cfg(not(feature = "dnssec"))]
@@ -1104,8 +1102,8 @@ impl Authority for InMemoryAuthority {
         _name: &LowerName,
         _is_secure: bool,
         _supported_algorithms: SupportedAlgorithms,
-    ) -> Self::LookupFuture {
-        future::result(Ok(AuthLookup::default()))
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Lookup, LookupError>> + Send>> {
+        Box::pin(future::ok(AuthLookup::default()))
     }
 
     #[cfg(feature = "dnssec")]

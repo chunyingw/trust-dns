@@ -3,10 +3,9 @@
 extern crate futures;
 extern crate test;
 extern crate tokio;
-extern crate tokio_tcp;
-extern crate tokio_udp;
+extern crate tokio_net;
 
-extern crate trust_dns;
+extern crate trust_dns_client;
 extern crate trust_dns_proto;
 extern crate trust_dns_server;
 
@@ -24,15 +23,15 @@ use std::time::Duration;
 use futures::Future;
 use test::Bencher;
 use tokio::runtime::current_thread::Runtime;
-use tokio_tcp::TcpStream;
-use tokio_udp::UdpSocket;
+use tokio_net::tcp::TcpStream;
+use tokio_net::udp::UdpSocket;
 
-use trust_dns::client::*;
-use trust_dns::op::*;
-use trust_dns::rr::dnssec::Signer;
-use trust_dns::rr::*;
-use trust_dns::tcp::*;
-use trust_dns::udp::*;
+use trust_dns_client::client::*;
+use trust_dns_client::op::*;
+use trust_dns_client::rr::dnssec::Signer;
+use trust_dns_client::rr::*;
+use trust_dns_client::tcp::*;
+use trust_dns_client::udp::*;
 use trust_dns_proto::error::*;
 use trust_dns_proto::xfer::*;
 
@@ -96,11 +95,11 @@ fn trust_dns_process() -> (NamedProcess, u16) {
         .stdout(Stdio::null())
         .arg("-q") // TODO: need to rethink this one...
         .arg(&format!(
-            "--config={}/tests/named_test_configs/example.toml",
+            "--config={}/tests/test-data/named_test_configs/example.toml",
             server_path
         ))
         .arg(&format!(
-            "--zonedir={}/tests/named_test_configs",
+            "--zonedir={}/tests/test-data/named_test_configs",
             server_path
         ))
         .arg(&format!("--port={}", test_port))
@@ -117,9 +116,9 @@ fn trust_dns_process() -> (NamedProcess, u16) {
 /// Runs the bench tesk using the specified client
 fn bench<F, S, R>(b: &mut Bencher, stream: F)
 where
-    F: Future<Item = S, Error = ProtoError> + 'static + Send,
+    F: Future<Output = Result<S, ProtoError>> + 'static + Send + Unpin,
     S: DnsRequestSender<DnsResponseFuture = R>,
-    R: Future<Item = DnsResponse, Error = ProtoError> + 'static + Send,
+    R: Future<Output = Result<DnsResponse, ProtoError>> + 'static + Send + Unpin,
 {
     let mut io_loop = Runtime::new().unwrap();
     let (bg, mut client) = ClientFuture::connect(stream);
@@ -128,8 +127,8 @@ where
     let name = domain::Name::from_str("www.example.com.").unwrap();
 
     // validate the request
-    let client = client.query(name.clone(), DNSClass::IN, RecordType::A);
-    let response = io_loop.block_on(client).expect("Request failed");
+    let query = client.query(name.clone(), DNSClass::IN, RecordType::A);
+    let response = io_loop.block_on(query).expect("Request failed");
 
     assert_eq!(response.response_code(), ResponseCode::NoError);
 

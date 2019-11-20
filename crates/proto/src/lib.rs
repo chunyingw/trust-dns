@@ -6,11 +6,17 @@
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
 // copied, modified, or distributed except according to those terms.
 
-#![warn(missing_docs)]
+#![warn(
+    missing_docs,
+    clippy::dbg_macro,
+    clippy::print_stdout,
+    clippy::unimplemented
+)]
 #![recursion_limit = "2048"]
 
 //! Trust-DNS Protocol library
 
+extern crate async_trait;
 #[cfg(feature = "dnssec")]
 extern crate data_encoding;
 #[macro_use]
@@ -18,7 +24,6 @@ extern crate enum_as_inner;
 #[cfg(test)]
 extern crate env_logger;
 extern crate failure;
-#[macro_use]
 extern crate futures;
 extern crate idna;
 #[macro_use]
@@ -37,14 +42,23 @@ extern crate socket2;
 #[cfg(test)]
 extern crate tokio;
 extern crate tokio_executor;
-#[macro_use]
 extern crate tokio_io;
 #[cfg(feature = "tokio-compat")]
-extern crate tokio_tcp;
+extern crate tokio_net;
+extern crate tokio_sync;
 extern crate tokio_timer;
-#[cfg(feature = "tokio-compat")]
-extern crate tokio_udp;
 extern crate url;
+
+macro_rules! try_ready_stream {
+    ($e:expr) => {{
+        match $e {
+            Poll::Ready(Some(Ok(t))) => t,
+            Poll::Ready(None) => return Poll::Ready(None),
+            Poll::Pending => return Poll::Pending,
+            Poll::Ready(Some(Err(e))) => return Poll::Ready(Some(Err(From::from(e)))),
+        }
+    }};
+}
 
 pub mod error;
 #[cfg(feature = "mdns")]

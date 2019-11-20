@@ -14,10 +14,10 @@ use std::sync::{Mutex, MutexGuard};
 use rusqlite::{self, types::ToSql, Connection};
 use time;
 
-use trust_dns::rr::Record;
-use trust_dns::serialize::binary::{BinDecodable, BinDecoder, BinEncodable, BinEncoder};
+use trust_dns_client::rr::Record;
+use trust_dns_client::serialize::binary::{BinDecodable, BinDecoder, BinEncodable, BinEncoder};
 
-use error::{PersistenceErrorKind, PersistenceResult};
+use crate::error::{PersistenceErrorKind, PersistenceResult};
 
 /// The current Journal version of the application
 pub const CURRENT_VERSION: i64 = 1;

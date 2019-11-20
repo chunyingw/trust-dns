@@ -13,12 +13,12 @@ use std::sync::Mutex;
 use proto::rr::RecordType;
 use tokio::runtime::{self, Runtime};
 
-use config::{ResolverConfig, ResolverOpts};
-use error::*;
-use lookup;
-use lookup::Lookup;
-use lookup_ip::LookupIp;
-use AsyncResolver;
+use crate::config::{ResolverConfig, ResolverOpts};
+use crate::error::*;
+use crate::lookup;
+use crate::lookup::Lookup;
+use crate::lookup_ip::LookupIp;
+use crate::AsyncResolver;
 
 /// The Resolver is used for performing DNS queries.
 ///
@@ -76,7 +76,7 @@ impl Resolver {
         let mut builder = runtime::Builder::new();
         builder.core_threads(1);
 
-        let mut runtime = builder.build()?;
+        let runtime = builder.build()?;
         let (async_resolver, bg) = AsyncResolver::new(config, options);
 
         runtime.spawn(bg);
@@ -163,6 +163,8 @@ impl Resolver {
     lookup_fn!(ipv4_lookup, lookup::Ipv4Lookup);
     lookup_fn!(ipv6_lookup, lookup::Ipv6Lookup);
     lookup_fn!(mx_lookup, lookup::MxLookup);
+    lookup_fn!(ns_lookup, lookup::NsLookup);
+    lookup_fn!(soa_lookup, lookup::SoaLookup);
     #[deprecated(note = "use lookup_srv instead, this interface is not ideal")]
     lookup_fn!(srv_lookup, lookup::SrvLookup);
     lookup_fn!(txt_lookup, lookup::TxtLookup);
@@ -170,6 +172,8 @@ impl Resolver {
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::dbg_macro, clippy::print_stdout)]
+
     use std::net::*;
 
     use super::*;

@@ -24,6 +24,7 @@ use ring::error::Unspecified;
 
 use failure::{Backtrace, Context, Fail};
 use tokio_executor::SpawnError;
+use tokio_timer::timeout::Elapsed;
 use tokio_timer::Error as TimerError;
 
 /// An alias for results returned by functions of this crate
@@ -34,7 +35,7 @@ pub type ProtoResult<T> = ::std::result::Result<T, ProtoError>;
 pub enum ProtoErrorKind {
     /// An error caused by a canceled future
     #[fail(display = "future was canceled: {:?}", _0)]
-    Canceled(::futures::sync::oneshot::Canceled),
+    Canceled(futures::channel::oneshot::Canceled),
 
     /// Character data length exceeded the limit
     #[fail(display = "char data length exceeds {}: {}", _0, _1)]
@@ -294,24 +295,9 @@ impl From<TimerError> for ProtoError {
     }
 }
 
-impl From<tokio_timer::timeout::Error<ProtoError>> for ProtoError {
-    fn from(e: tokio_timer::timeout::Error<ProtoError>) -> Self {
-        if e.is_elapsed() {
-            return ProtoError::from(ProtoErrorKind::Timeout);
-        }
-
-        if e.is_inner() {
-            return e.into_inner().expect("invalid state, not a ProtoError");
-        }
-
-        if e.is_timer() {
-            return ProtoError::from(
-                e.into_timer()
-                    .expect("invalid state, not a tokio_timer::Error"),
-            );
-        }
-
-        ProtoError::from("unknown error with tokio_timer")
+impl From<Elapsed> for ProtoError {
+    fn from(e: Elapsed) -> ProtoError {
+        e.context(ProtoErrorKind::Timeout).into()
     }
 }
 

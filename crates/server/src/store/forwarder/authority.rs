@@ -5,18 +5,23 @@
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
 // copied, modified, or distributed except according to those terms.
 
-use futures::{Async, Future, Poll};
+use std::pin::Pin;
+use std::task::Context;
 
-use trust_dns::op::LowerQuery;
-use trust_dns::op::ResponseCode;
-use trust_dns::rr::dnssec::SupportedAlgorithms;
-use trust_dns::rr::{LowerName, Name, Record, RecordType};
+use futures::{Future, FutureExt, Poll};
+
+use trust_dns_client::op::LowerQuery;
+use trust_dns_client::op::ResponseCode;
+use trust_dns_client::rr::dnssec::SupportedAlgorithms;
+use trust_dns_client::rr::{LowerName, Name, Record, RecordType};
 use trust_dns_resolver::config::ResolverConfig;
 use trust_dns_resolver::lookup::Lookup as ResolverLookup;
 use trust_dns_resolver::{AsyncResolver, BackgroundLookup};
 
-use authority::{Authority, LookupError, LookupObject, MessageRequest, UpdateResult, ZoneType};
-use store::forwarder::ForwardConfig;
+use crate::authority::{
+    Authority, LookupError, LookupObject, MessageRequest, UpdateResult, ZoneType,
+};
+use crate::store::forwarder::ForwardConfig;
 
 /// An authority that will forward resolutions to upstream resolvers.
 ///
@@ -46,7 +51,7 @@ impl ForwardAuthority {
         origin: Name,
         _zone_type: ZoneType,
         config: &ForwardConfig,
-    ) -> Result<(Self, impl Future<Item = (), Error = ()>), String> {
+    ) -> Result<(Self, impl Future<Output = ()>), String> {
         info!("loading forwarder config: {}", origin);
 
         let name_servers = config.name_servers.clone();
@@ -57,6 +62,7 @@ impl ForwardAuthority {
 
         info!("forward resolver configured: {}: ", origin);
 
+        // TODO: this might be infallible?
         Ok((
             ForwardAuthority {
                 origin: origin.into(),
@@ -101,12 +107,12 @@ impl Authority for ForwardAuthority {
         rtype: RecordType,
         _is_secure: bool,
         _supported_algorithms: SupportedAlgorithms,
-    ) -> Self::LookupFuture {
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Lookup, LookupError>> + Send>> {
         // TODO: make this an error?
         assert!(self.origin.zone_of(name));
 
         info!("forwarding lookup: {} {}", name, rtype);
-        ForwardLookupFuture(self.resolver.lookup(name, rtype))
+        Box::pin(ForwardLookupFuture(self.resolver.lookup(name, rtype)))
     }
 
     fn search(
@@ -114,8 +120,8 @@ impl Authority for ForwardAuthority {
         query: &LowerQuery,
         is_secure: bool,
         supported_algorithms: SupportedAlgorithms,
-    ) -> Box<dyn Future<Item = Self::Lookup, Error = LookupError> + Send> {
-        Box::new(self.lookup(
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Lookup, LookupError>> + Send>> {
+        Box::pin(self.lookup(
             query.name(),
             query.query_type(),
             is_secure,
@@ -123,12 +129,13 @@ impl Authority for ForwardAuthority {
         ))
     }
 
+    #[allow(clippy::unimplemented)] // FIXME: this should return an error
     fn get_nsec_records(
         &self,
         _name: &LowerName,
         _is_secure: bool,
         _supported_algorithms: SupportedAlgorithms,
-    ) -> Self::LookupFuture {
+    ) -> Pin<Box<dyn Future<Output = Result<Self::Lookup, LookupError>> + Send>> {
         unimplemented!()
     }
 }
@@ -152,14 +159,13 @@ impl LookupObject for ForwardLookup {
 pub struct ForwardLookupFuture(BackgroundLookup);
 
 impl Future for ForwardLookupFuture {
-    type Item = ForwardLookup;
-    type Error = LookupError;
+    type Output = Result<ForwardLookup, LookupError>;
 
-    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        match self.0.poll() {
-            Ok(Async::Ready(f)) => Ok(Async::Ready(ForwardLookup(f))),
-            Ok(Async::NotReady) => Ok(Async::NotReady),
-            Err(e) => Err(e.into()),
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+        match self.0.poll_unpin(cx) {
+            Poll::Ready(Ok(f)) => Poll::Ready(Ok(ForwardLookup(f))),
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e.into())),
         }
     }
 }

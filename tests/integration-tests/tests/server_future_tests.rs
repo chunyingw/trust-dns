@@ -2,10 +2,9 @@ extern crate futures;
 extern crate openssl;
 extern crate rustls;
 extern crate tokio;
-extern crate tokio_tcp;
+extern crate tokio_net;
 extern crate tokio_timer;
-extern crate tokio_udp;
-extern crate trust_dns;
+extern crate trust_dns_client;
 extern crate trust_dns_integration;
 extern crate trust_dns_openssl;
 extern crate trust_dns_proto;
@@ -14,23 +13,24 @@ extern crate trust_dns_server;
 
 use std::io;
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::pin::Pin;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
+use futures::executor::block_on;
 use futures::{future, Future};
 use tokio::runtime::current_thread::Runtime;
-use tokio_tcp::TcpListener;
-use tokio_timer::Delay;
-use tokio_udp::UdpSocket;
+use tokio_net::tcp::TcpListener;
+use tokio_net::udp::UdpSocket;
 
-use trust_dns::client::*;
-use trust_dns::op::*;
-use trust_dns::rr::*;
-use trust_dns::tcp::TcpClientConnection;
-use trust_dns::udp::UdpClientConnection;
+use trust_dns_client::client::*;
+use trust_dns_client::op::*;
+use trust_dns_client::rr::*;
+use trust_dns_client::tcp::TcpClientConnection;
+use trust_dns_client::udp::UdpClientConnection;
 use trust_dns_proto::error::ProtoError;
 use trust_dns_proto::xfer::DnsRequestSender;
 
@@ -45,7 +45,7 @@ use trust_dns_integration::tls_client_connection::TlsClientConnection;
 #[test]
 fn test_server_www_udp() {
     let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 0));
-    let udp_socket = UdpSocket::bind(&addr).unwrap();
+    let udp_socket = block_on(UdpSocket::bind(&addr)).unwrap();
 
     let ipaddr = udp_socket.local_addr().unwrap();
     println!("udp_socket on port: {}", ipaddr);
@@ -72,7 +72,7 @@ fn test_server_www_udp() {
 #[test]
 fn test_server_www_tcp() {
     let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 0));
-    let tcp_listener = TcpListener::bind(&addr).unwrap();
+    let tcp_listener = block_on(TcpListener::bind(&addr)).unwrap();
 
     let ipaddr = tcp_listener.local_addr().unwrap();
     println!("tcp_listner on port: {}", ipaddr);
@@ -98,8 +98,10 @@ fn test_server_www_tcp() {
 
 #[test]
 fn test_server_unknown_type() {
+    use futures::executor::block_on;
+
     let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 0));
-    let udp_socket = UdpSocket::bind(&addr).unwrap();
+    let udp_socket = block_on(UdpSocket::bind(&addr)).unwrap();
 
     let ipaddr = udp_socket.local_addr().unwrap();
     println!("udp_socket on port: {}", ipaddr);
@@ -160,6 +162,7 @@ fn read_file(path: &str) -> Vec<u8> {
 #[test]
 
 fn test_server_www_tls() {
+    use futures::executor::block_on;
     use std::env;
 
     let dns_name = "ns.example.com";
@@ -173,7 +176,7 @@ fn test_server_www_tls() {
 
     // Server address
     let addr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 0));
-    let tcp_listener = TcpListener::bind(&addr).unwrap();
+    let tcp_listener = block_on(TcpListener::bind(&addr)).unwrap();
 
     let ipaddr = tcp_listener.local_addr().unwrap();
     println!("tcp_listner on port: {}", ipaddr);
@@ -222,8 +225,8 @@ fn lazy_tls_client(ipaddr: SocketAddr, dns_name: String, cert_der: Vec<u8>) -> T
 fn client_thread_www<C: ClientConnection>(conn: C)
 where
     C::Sender: DnsRequestSender<DnsResponseFuture = C::Response>,
-    C::Response: Future<Item = DnsResponse, Error = ProtoError> + 'static + Send,
-    C::SenderFuture: Future<Item = C::Sender, Error = ProtoError> + 'static + Send,
+    C::Response: Future<Output = Result<DnsResponse, ProtoError>> + 'static + Send,
+    C::SenderFuture: Future<Output = Result<C::Sender, ProtoError>> + 'static + Send,
 {
     let name = Name::from_str("www.example.com").unwrap();
     let client = SyncClient::new(conn);
@@ -279,17 +282,14 @@ fn server_thread_udp(udp_socket: UdpSocket, server_continue: Arc<AtomicBool>) {
 
     let mut io_loop = Runtime::new().unwrap();
     let server = ServerFuture::new(catalog);
-    io_loop
-        .block_on::<Box<dyn Future<Item = (), Error = ()> + Send>>(Box::new(future::lazy(|| {
-            server.register_socket(udp_socket);
-            future::ok(())
-        })))
-        .unwrap();
+    io_loop.block_on::<Pin<Box<dyn Future<Output = ()> + Send>>>(Box::pin(future::lazy(|_| {
+        server.register_socket(udp_socket);
+    })));
 
     while server_continue.load(Ordering::Relaxed) {
-        io_loop
-            .block_on(Delay::new(Instant::now() + Duration::from_millis(10)))
-            .unwrap();
+        io_loop.block_on(tokio_timer::delay(
+            Instant::now() + Duration::from_millis(10),
+        ));
     }
 }
 
@@ -298,50 +298,52 @@ fn server_thread_tcp(tcp_listener: TcpListener, server_continue: Arc<AtomicBool>
     let mut io_loop = Runtime::new().unwrap();
     let server = ServerFuture::new(catalog);
     io_loop
-        .block_on::<Box<dyn Future<Item = (), Error = io::Error> + Send>>(Box::new(future::lazy(
-            || future::result(server.register_listener(tcp_listener, Duration::from_secs(30))),
-        )))
+        .block_on::<Pin<Box<dyn Future<Output = Result<(), io::Error>> + Send>>>(Box::pin(
+            future::lazy(|_| server.register_listener(tcp_listener, Duration::from_secs(30))),
+        ))
         .expect("tcp registration failed");
 
     while server_continue.load(Ordering::Relaxed) {
-        io_loop
-            .block_on(Delay::new(Instant::now() + Duration::from_millis(10)))
-            .unwrap();
+        io_loop.block_on(tokio_timer::delay(
+            Instant::now() + Duration::from_millis(10),
+        ));
     }
 }
 
-// FIXME: need a rustls option
+// TODO: need a rustls option
 #[cfg(all(feature = "dns-over-openssl", not(feature = "dns-over-rustls")))]
 fn server_thread_tls(
     tls_listener: TcpListener,
     server_continue: Arc<AtomicBool>,
     pkcs12_der: Vec<u8>,
 ) {
+    use futures::FutureExt;
     use openssl::pkcs12::Pkcs12;
 
     let catalog = new_catalog();
     let mut io_loop = Runtime::new().unwrap();
     let server = ServerFuture::new(catalog);
     io_loop
-        .block_on::<Box<Future<Item = (), Error = io::Error> + Send>>(Box::new(future::lazy(
-            || {
+        .block_on(
+            future::lazy(|_| {
                 let pkcs12 = Pkcs12::from_der(&pkcs12_der)
                     .expect("bad pkcs12 der")
                     .parse("mypass")
                     .expect("Pkcs12::from_der");
                 let pkcs12 = ((pkcs12.cert, pkcs12.chain), pkcs12.pkey);
-                future::result(server.register_tls_listener(
+                future::ready(server.register_tls_listener(
                     tls_listener,
                     Duration::from_secs(30),
                     pkcs12,
                 ))
-            },
-        )))
+            })
+            .flatten(),
+        )
         .expect("tcp registration failed");
 
     while server_continue.load(Ordering::Relaxed) {
-        io_loop
-            .block_on(Delay::new(Instant::now() + Duration::from_millis(10)))
-            .unwrap();
+        io_loop.block_on(tokio_timer::delay(
+            Instant::now() + Duration::from_millis(10),
+        ));
     }
 }

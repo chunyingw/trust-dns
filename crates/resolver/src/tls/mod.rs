@@ -13,7 +13,7 @@ mod dns_over_rustls;
 
 cfg_if! {
     if #[cfg(feature = "dns-over-rustls")] {
-        pub(crate) use self::dns_over_rustls::new_tls_stream;
+        pub(crate) use self::dns_over_rustls::{new_tls_stream, CLIENT_CONFIG};
     } else if #[cfg(feature = "dns-over-native-tls")] {
         pub(crate) use self::dns_over_native_tls::new_tls_stream;
     } else if #[cfg(feature = "dns-over-openssl")] {
@@ -31,8 +31,8 @@ mod tests {
 
     use tokio::runtime::current_thread::Runtime;
 
-    use config::{ResolverConfig, ResolverOpts};
-    use AsyncResolver;
+    use crate::config::{ResolverConfig, ResolverOpts};
+    use crate::AsyncResolver;
 
     fn tls_test(config: ResolverConfig) {
         env_logger::try_init().ok();
@@ -71,5 +71,4 @@ mod tests {
     fn test_quad9_tls() {
         tls_test(ResolverConfig::quad9_tls())
     }
-
 }

@@ -11,9 +11,8 @@ extern crate futures;
 #[macro_use]
 extern crate log;
 extern crate tokio;
-extern crate tokio_tcp;
-extern crate tokio_udp;
-extern crate trust_dns;
+extern crate tokio_net;
+extern crate trust_dns_client;
 extern crate trust_dns_proto;
 extern crate trust_dns_server;
 
@@ -27,14 +26,14 @@ use std::net::*;
 use std::str::FromStr;
 
 use tokio::runtime::current_thread::Runtime;
-use tokio_tcp::TcpStream as TokioTcpStream;
-use tokio_udp::UdpSocket as TokioUdpSocket;
+use tokio_net::tcp::TcpStream as TokioTcpStream;
+use tokio_net::udp::UdpSocket as TokioUdpSocket;
 
-use trust_dns::client::*;
-use trust_dns::op::ResponseCode;
-use trust_dns::rr::*;
-use trust_dns::tcp::TcpClientStream;
-use trust_dns::udp::UdpClientStream;
+use trust_dns_client::client::*;
+use trust_dns_client::op::ResponseCode;
+use trust_dns_client::rr::*;
+use trust_dns_client::tcp::TcpClientStream;
+use trust_dns_client::udp::UdpClientStream;
 
 // TODO: Needed for when TLS tests are added back
 // #[cfg(feature = "dns-over-openssl")]
@@ -250,7 +249,7 @@ fn test_server_continues_on_bad_data_tcp() {
 }
 
 #[test]
-#[cfg(feature = "trust-dns-resolver")]
+#[cfg(feature = "resolver")]
 fn test_forward() {
     use server_harness::query_message;
 

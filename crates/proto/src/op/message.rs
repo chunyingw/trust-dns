@@ -737,7 +737,7 @@ where
     let place = encoder.place::<Header>()?;
 
     let query_count = queries.emit(encoder)?;
-    // FIXME: need to do some on max records
+    // TODO: need to do something on max records
     //  return offset of last emitted record.
     let answer_count = count_was_truncated(answers.emit(encoder))?;
     let nameserver_count = count_was_truncated(name_servers.emit(encoder))?;
@@ -749,8 +749,6 @@ where
         additional_count.0 += count.0;
         additional_count.1 |= count.1;
     }
-
-    // FIXME: because this is destructive, we need to move message signing here... maybe it will work?
 
     // this is a little hacky, but if we are Verifying a signature, i.e. the original Message
     //  then the SIG0 records should not be encoded and the edns record (if it exists) is already

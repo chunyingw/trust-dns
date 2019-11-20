@@ -14,15 +14,15 @@ use std::time::Duration;
 use proto::udp::{UdpClientConnect, UdpClientStream};
 use proto::xfer::DnsRequestSender;
 
-use client::ClientConnection;
-use error::*;
-use rr::dnssec::Signer;
+use crate::client::ClientConnection;
+use crate::error::*;
+use crate::rr::dnssec::Signer;
 
-use tokio_udp::UdpSocket;
+use tokio_net::udp::UdpSocket;
 
 /// UDP based DNS Client connection
 ///
-/// Use with `trust_dns::client::Client` impls
+/// Use with `trust_dns_client::client::Client` impls
 #[derive(Clone)]
 pub struct UdpClientConnection {
     name_server: SocketAddr,

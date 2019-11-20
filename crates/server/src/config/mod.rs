@@ -20,11 +20,11 @@ use log;
 use toml;
 
 use proto::error::ProtoResult;
-use trust_dns::rr::Name;
+use trust_dns_client::rr::Name;
 
-use authority::ZoneType;
-use error::{ConfigError, ConfigResult};
-use store::StoreConfig;
+use crate::authority::ZoneType;
+use crate::error::{ConfigError, ConfigResult};
+use crate::store::StoreConfig;
 
 static DEFAULT_PATH: &str = "/var/named"; // TODO what about windows (do I care? ;)
 static DEFAULT_PORT: u16 = 53;

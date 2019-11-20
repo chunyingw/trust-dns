@@ -14,7 +14,7 @@ extern crate futures;
 extern crate log;
 extern crate rustls;
 extern crate tokio;
-extern crate trust_dns;
+extern crate trust_dns_client;
 extern crate trust_dns_proto;
 extern crate trust_dns_rustls;
 extern crate trust_dns_server;
@@ -31,7 +31,7 @@ use rustls::Certificate;
 use rustls::ClientConfig;
 use tokio::runtime::current_thread::Runtime;
 
-use trust_dns::client::*;
+use trust_dns_client::client::*;
 use trust_dns_rustls::tls_client_connect;
 
 use server_harness::{named_test_harness, query_a};
@@ -46,7 +46,7 @@ fn test_example_tls_toml_startup() {
             println!("using server src path: {}", server_path);
 
             File::open(&format!(
-                "{}/tests/named_test_configs/sec/example.cert",
+                "{}/../tests/test-data/named_test_configs/sec/example.cert",
                 server_path
             ))
             .expect("failed to open cert")
@@ -78,8 +78,7 @@ fn test_example_tls_toml_startup() {
                 .unwrap()
                 .next()
                 .unwrap();
-            let (stream, sender) =
-                tls_client_connect(addr, "ns.example.com".to_string(), config.clone());
+            let (stream, sender) = tls_client_connect(addr, "ns.example.com".to_string(), config);
             let (bg, mut client) = ClientFuture::new(stream, Box::new(sender), None);
             io_loop.spawn(bg);
 

@@ -1,6 +1,6 @@
 [package]
 name = "trust-dns-proto"
-version = "0.8.0"
+version = "0.18.0-alpha.1"
 edition = "2018"
 authors = ["Benjamin Fry <benjaminfry@me.com>"]
 
@@ -11,7 +11,7 @@ Trust-DNS is a safe and secure DNS library. This is the foundational DNS protoco
 """
 
 # These URLs point to more information about the repository
-documentation = "https://docs.rs/trust-dns"
+documentation = "https://docs.rs/trust-dns-proto"
 homepage = "http://www.trust-dns.org/index.html"
 repository = "https://github.com/bluejekyll/trust-dns"
 
@@ -39,7 +39,7 @@ codecov = { repository = "bluejekyll/trust-dns", branch = "master", service = "g
 dnssec-openssl = ["dnssec", "openssl"]
 dnssec-ring = ["dnssec", "ring"]
 dnssec = ["data-encoding"]
-tokio-compat = ["tokio-reactor", "tokio-tcp", "tokio-udp"]
+tokio-compat = ["tokio-net"]
 default = ["tokio-compat"]
 
 serde-config = ["serde"]
@@ -55,10 +55,11 @@ name = "trust_dns_proto"
 path = "src/lib.rs"
 
 [dependencies]
+async-trait = "0.1.18"
 data-encoding = { version = "2.1.0", optional = true }
 enum-as-inner = "0.3"
 failure = "0.1"
-futures = "^0.1.28"
+futures-preview = "0.3.0-alpha"
 idna = "^0.2.0"
 lazy_static = "^1.0"
 log = "^0.4.8"
@@ -66,16 +67,15 @@ openssl = { version = "^0.10", features = ["v102", "v110"], optional = true }
 rand = "0.7"
 ring = { version = "0.16", optional = true, features = ["std"] }
 serde = { version = "1.0", optional = true }
-smallvec = "^0.6"
+smallvec = "^1.0"
 socket2 = { version = "^0.3.10" }
-tokio-executor = "0.1.8"
-tokio-io = "^0.1"
-tokio-reactor = { version = "^0.1", optional = true}
-tokio-tcp = { version = "^0.1", optional = true }
-tokio-timer = "0.2.10"
-tokio-udp = { version = "^0.1", optional = true }
+tokio-executor = "0.2.0-alpha"
+tokio-io = "0.2.0-alpha"
+tokio-sync = "0.2.0-alpha"
+tokio-net = { version = "0.2.0-alpha", optional = true }
+tokio-timer = "0.3.0-alpha"
 url = "2.1.0"
 
 [dev-dependencies]
-env_logger = "^0.6"
-tokio = "^0.1.22"
+env_logger = "^0.7"
+tokio = "0.2.0-alpha"

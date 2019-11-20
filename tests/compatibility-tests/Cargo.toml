@@ -1,7 +1,8 @@
 [package]
 name = "trust-dns-compatibility"
-version = "0.1.0"
+version = "0.18.0-alpha.1"
 authors = ["Benjamin Fry <benjaminfry@me.com>"]
+edition = "2018"
 
 # A short blurb about the package. This is not rendered in any format when
 # uploaded to crates.io (aka this is not markdown)
@@ -37,7 +38,7 @@ appveyor = { repository = "bluejekyll/trust-dns", branch = "master", service = "
 default = ["none"]
 none = []
 bind = []
-trust_dns = []
+trust_dns_client = []
 
 [lib]
 name = "trust_dns_compatibility"
@@ -46,8 +47,8 @@ path = "src/lib.rs"
 [dependencies]
 chrono = "^0.4"
 data-encoding = "2.1.0"
-env_logger = "0.6"
-futures = "^0.1.28"
-openssl = { version = "^0.10", features = ["v102", "v110"] }
+env_logger = "0.7"
+futures-preview = "0.3.0-alpha"
+openssl = { version = "0.10", features = ["v102", "v110"] }
 rand = "0.7"
-trust-dns = { version = "0.17.0", path="../../crates/client", features = ["dnssec-openssl"] }
+trust-dns-client= { version = "0.18.0-alpha", path="../../crates/client", features = ["dnssec-openssl"] }

@@ -1,20 +1,21 @@
+#![allow(clippy::dbg_macro)]
+
 use std::net::{Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 
+use futures::executor::block_on;
 use futures::future::Future;
 
-use trust_dns::op::{Message, Query};
-use trust_dns::rr::dnssec::SupportedAlgorithms;
-use trust_dns::rr::{Name, RData, Record, RecordType};
+use trust_dns_client::op::{Message, Query};
+use trust_dns_client::rr::dnssec::SupportedAlgorithms;
+use trust_dns_client::rr::{Name, RData, Record, RecordType};
 use trust_dns_server::authority::{AuthLookup, Authority, MessageRequest};
 
 pub fn test_a_lookup<A: Authority<Lookup = AuthLookup>>(authority: A) {
     let query = Query::query(Name::from_str("www.example.com.").unwrap(), RecordType::A);
 
-    let lookup = authority
-        .search(&query.into(), false, SupportedAlgorithms::new())
-        .wait()
-        .unwrap();
+    let lookup =
+        block_on(authority.search(&query.into(), false, SupportedAlgorithms::new())).unwrap();
 
     match lookup
         .into_iter()
@@ -29,7 +30,7 @@ pub fn test_a_lookup<A: Authority<Lookup = AuthLookup>>(authority: A) {
 
 #[allow(clippy::unreadable_literal)]
 pub fn test_soa<A: Authority<Lookup = AuthLookup>>(authority: A) {
-    let lookup = authority.soa().wait().unwrap();
+    let lookup = block_on(authority.soa()).unwrap();
 
     match lookup
         .into_iter()
@@ -51,10 +52,7 @@ pub fn test_soa<A: Authority<Lookup = AuthLookup>>(authority: A) {
 }
 
 pub fn test_ns<A: Authority<Lookup = AuthLookup>>(authority: A) {
-    let lookup = authority
-        .ns(false, SupportedAlgorithms::new())
-        .wait()
-        .unwrap();
+    let lookup = block_on(authority.ns(false, SupportedAlgorithms::new())).unwrap();
 
     match lookup
         .into_iter()
@@ -70,10 +68,8 @@ pub fn test_ns<A: Authority<Lookup = AuthLookup>>(authority: A) {
 pub fn test_ns_lookup<A: Authority<Lookup = AuthLookup>>(authority: A) {
     let query = Query::query(Name::from_str("example.com.").unwrap(), RecordType::NS);
 
-    let mut lookup = authority
-        .search(&query.into(), false, SupportedAlgorithms::new())
-        .wait()
-        .unwrap();
+    let mut lookup =
+        block_on(authority.search(&query.into(), false, SupportedAlgorithms::new())).unwrap();
 
     let additionals = dbg!(lookup
         .take_additionals()
@@ -102,10 +98,8 @@ pub fn test_ns_lookup<A: Authority<Lookup = AuthLookup>>(authority: A) {
 pub fn test_mx<A: Authority<Lookup = AuthLookup>>(authority: A) {
     let query = Query::query(Name::from_str("example.com.").unwrap(), RecordType::MX);
 
-    let mut lookup = authority
-        .search(&query.into(), false, SupportedAlgorithms::new())
-        .wait()
-        .unwrap();
+    let mut lookup =
+        block_on(authority.search(&query.into(), false, SupportedAlgorithms::new())).unwrap();
 
     let additionals = dbg!(lookup
         .take_additionals()
@@ -158,10 +152,8 @@ pub fn test_cname<A: Authority<Lookup = AuthLookup>>(authority: A) {
         RecordType::CNAME,
     );
 
-    let lookup = authority
-        .search(&query.into(), false, SupportedAlgorithms::new())
-        .wait()
-        .unwrap();
+    let lookup =
+        block_on(authority.search(&query.into(), false, SupportedAlgorithms::new())).unwrap();
 
     let cname = lookup
         .into_iter()
@@ -177,10 +169,8 @@ pub fn test_cname<A: Authority<Lookup = AuthLookup>>(authority: A) {
 pub fn test_cname_alias<A: Authority<Lookup = AuthLookup>>(authority: A) {
     let query = Query::query(Name::from_str("alias.example.com.").unwrap(), RecordType::A);
 
-    let mut lookup = authority
-        .search(&query.into(), false, SupportedAlgorithms::new())
-        .wait()
-        .unwrap();
+    let mut lookup =
+        block_on(authority.search(&query.into(), false, SupportedAlgorithms::new())).unwrap();
 
     let additionals = lookup
         .take_additionals()
@@ -214,10 +204,8 @@ pub fn test_cname_chain<A: Authority<Lookup = AuthLookup>>(authority: A) {
         RecordType::A,
     );
 
-    let mut lookup = authority
-        .search(&query.into(), false, SupportedAlgorithms::new())
-        .wait()
-        .unwrap();
+    let mut lookup =
+        block_on(authority.search(&query.into(), false, SupportedAlgorithms::new())).unwrap();
 
     let additionals = lookup
         .take_additionals()
@@ -259,10 +247,8 @@ pub fn test_cname_chain<A: Authority<Lookup = AuthLookup>>(authority: A) {
 pub fn test_aname<A: Authority<Lookup = AuthLookup>>(authority: A) {
     let query = Query::query(Name::from_str("example.com.").unwrap(), RecordType::ANAME);
 
-    let mut lookup = authority
-        .search(&query.into(), false, SupportedAlgorithms::new())
-        .wait()
-        .unwrap();
+    let mut lookup =
+        block_on(authority.search(&query.into(), false, SupportedAlgorithms::new())).unwrap();
 
     let additionals = lookup
         .take_additionals()
@@ -302,10 +288,8 @@ pub fn test_aname<A: Authority<Lookup = AuthLookup>>(authority: A) {
 pub fn test_aname_a_lookup<A: Authority<Lookup = AuthLookup>>(authority: A) {
     let query = Query::query(Name::from_str("example.com.").unwrap(), RecordType::A);
 
-    let mut lookup = authority
-        .search(&query.into(), false, SupportedAlgorithms::new())
-        .wait()
-        .unwrap();
+    let mut lookup =
+        block_on(authority.search(&query.into(), false, SupportedAlgorithms::new())).unwrap();
 
     let additionals = lookup.take_additionals().expect("no additionals for aname");
 
@@ -341,10 +325,8 @@ pub fn test_aname_chain<A: Authority<Lookup = AuthLookup>>(authority: A) {
         RecordType::A,
     );
 
-    let mut lookup = authority
-        .search(&query.into(), false, SupportedAlgorithms::new())
-        .wait()
-        .unwrap();
+    let mut lookup =
+        block_on(authority.search(&query.into(), false, SupportedAlgorithms::new())).unwrap();
 
     let additionals = lookup.take_additionals().expect("no additionals");
 
@@ -388,7 +370,7 @@ pub fn test_aname_chain<A: Authority<Lookup = AuthLookup>>(authority: A) {
 }
 
 pub fn test_update_errors<A: Authority<Lookup = AuthLookup>>(mut authority: A) {
-    use trust_dns::serialize::binary::BinDecodable;
+    use trust_dns_client::serialize::binary::BinDecodable;
 
     let message = Message::default();
     let bytes = message.to_vec().unwrap();
@@ -403,10 +385,8 @@ pub fn test_dots_in_name<A: Authority<Lookup = AuthLookup>>(authority: A) {
         Name::from_str("this.has.dots.example.com.").unwrap(),
         RecordType::A,
     );
-    let lookup = authority
-        .search(&query.into(), false, SupportedAlgorithms::new())
-        .wait()
-        .unwrap();
+    let lookup =
+        block_on(authority.search(&query.into(), false, SupportedAlgorithms::new())).unwrap();
 
     assert_eq!(
         *lookup
@@ -424,19 +404,15 @@ pub fn test_dots_in_name<A: Authority<Lookup = AuthLookup>>(authority: A) {
         Name::from_str("has.dots.example.com.").unwrap(),
         RecordType::A,
     );
-    let lookup = authority
-        .search(&query.into(), false, SupportedAlgorithms::new())
-        .wait()
-        .unwrap_err();
+    let lookup =
+        block_on(authority.search(&query.into(), false, SupportedAlgorithms::new())).unwrap_err();
 
     assert!(lookup.is_name_exists(), "lookup: {}", lookup);
 
     // the rest should all be NameExists
     let query = Query::query(Name::from_str("dots.example.com.").unwrap(), RecordType::A);
-    let lookup = authority
-        .search(&query.into(), false, SupportedAlgorithms::new())
-        .wait()
-        .unwrap_err();
+    let lookup =
+        block_on(authority.search(&query.into(), false, SupportedAlgorithms::new())).unwrap_err();
 
     assert!(lookup.is_name_exists());
 
@@ -445,10 +421,8 @@ pub fn test_dots_in_name<A: Authority<Lookup = AuthLookup>>(authority: A) {
         Name::from_str("not.this.has.dots.example.com.").unwrap(),
         RecordType::A,
     );
-    let lookup = authority
-        .search(&query.into(), false, SupportedAlgorithms::new())
-        .wait()
-        .unwrap_err();
+    let lookup =
+        block_on(authority.search(&query.into(), false, SupportedAlgorithms::new())).unwrap_err();
 
     assert!(lookup.is_nx_domain());
 }
@@ -459,10 +433,8 @@ pub fn test_wildcard<A: Authority<Lookup = AuthLookup>>(authority: A) {
         Name::from_str("*.wildcard.example.com.").unwrap(),
         RecordType::CNAME,
     );
-    let lookup = authority
-        .search(&query.into(), false, SupportedAlgorithms::new())
-        .wait()
-        .unwrap();
+    let lookup =
+        block_on(authority.search(&query.into(), false, SupportedAlgorithms::new())).unwrap();
 
     assert_eq!(
         *lookup
@@ -480,9 +452,7 @@ pub fn test_wildcard<A: Authority<Lookup = AuthLookup>>(authority: A) {
         Name::from_str("www.wildcard.example.com.").unwrap(),
         RecordType::CNAME,
     );
-    let lookup = authority
-        .search(&query.into(), false, SupportedAlgorithms::new())
-        .wait()
+    let lookup = block_on(authority.search(&query.into(), false, SupportedAlgorithms::new()))
         .expect("lookup of www.wildcard.example.com. failed");
 
     assert_eq!(
@@ -510,9 +480,7 @@ pub fn test_wildcard_chain<A: Authority<Lookup = AuthLookup>>(authority: A) {
         Name::from_str("www.wildcard.example.com.").unwrap(),
         RecordType::A,
     );
-    let mut lookup = authority
-        .search(&query.into(), false, SupportedAlgorithms::new())
-        .wait()
+    let mut lookup = block_on(authority.search(&query.into(), false, SupportedAlgorithms::new()))
         .expect("lookup of www.wildcard.example.com. failed");
 
     // the name should match the lookup, not the A records
@@ -545,10 +513,8 @@ pub fn test_srv<A: Authority<Lookup = AuthLookup>>(authority: A) {
         RecordType::SRV,
     );
 
-    let mut lookup = authority
-        .search(&query.into(), false, SupportedAlgorithms::new())
-        .wait()
-        .unwrap();
+    let mut lookup =
+        block_on(authority.search(&query.into(), false, SupportedAlgorithms::new())).unwrap();
 
     let additionals = dbg!(lookup
         .take_additionals()
@@ -599,8 +565,8 @@ macro_rules! define_basic_test {
         $(
             #[test]
             fn $f () {
-                let authority = ::$new("tests/named_test_configs/example.com.zone", module_path!(), stringify!($f));
-                ::authority_battery::basic::$f(authority);
+                let authority = crate::$new("../../tests/test-data/named_test_configs/example.com.zone", module_path!(), stringify!($f));
+                crate::authority_battery::basic::$f(authority);
             }
         )*
     }

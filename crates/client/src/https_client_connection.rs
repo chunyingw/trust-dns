@@ -14,12 +14,12 @@ use proto::xfer::DnsRequestSender;
 use rustls::{Certificate, ClientConfig};
 use trust_dns_https::{HttpsClientConnect, HttpsClientStream, HttpsClientStreamBuilder};
 
-use client::ClientConnection;
-use rr::dnssec::Signer;
+use crate::client::ClientConnection;
+use crate::rr::dnssec::Signer;
 
 /// UDP based DNS Client connection
 ///
-/// Use with `trust_dns::client::Client` impls
+/// Use with `trust_dns_client::client::Client` impls
 #[derive(Clone)]
 pub struct HttpsClientConnection {
     name_server: SocketAddr,
@@ -54,7 +54,7 @@ impl ClientConnection for HttpsClientConnection {
     ) -> Self::SenderFuture {
         // TODO: maybe signer needs to be applied in https...
         let https_builder =
-            HttpsClientStreamBuilder::with_client_config(self.client_config.clone());
+            HttpsClientStreamBuilder::with_client_config(Arc::new(self.client_config.clone()));
         https_builder.build(self.name_server, self.dns_name.clone())
     }
 }

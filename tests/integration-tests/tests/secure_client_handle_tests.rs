@@ -2,9 +2,8 @@
 
 extern crate futures;
 extern crate tokio;
-extern crate tokio_tcp;
-extern crate tokio_udp;
-extern crate trust_dns;
+extern crate tokio_net;
+extern crate trust_dns_client;
 extern crate trust_dns_integration;
 extern crate trust_dns_proto;
 extern crate trust_dns_server;
@@ -14,19 +13,19 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 use tokio::runtime::current_thread::Runtime;
-use tokio_tcp::TcpStream as TokioTcpStream;
-use tokio_udp::UdpSocket as TokioUdpSocket;
+use tokio_net::tcp::TcpStream as TokioTcpStream;
+use tokio_net::udp::UdpSocket as TokioUdpSocket;
 
-use trust_dns::client::{
+use trust_dns_client::client::{
     BasicClientHandle, ClientFuture, ClientHandle, MemoizeClientHandle, SecureClientHandle,
 };
-use trust_dns::op::ResponseCode;
-use trust_dns::rr::dnssec::TrustAnchor;
-use trust_dns::rr::Name;
-use trust_dns::rr::{DNSClass, RData, RecordType};
-use trust_dns::tcp::TcpClientStream;
+use trust_dns_client::op::ResponseCode;
+use trust_dns_client::rr::dnssec::TrustAnchor;
+use trust_dns_client::rr::Name;
+use trust_dns_client::rr::{DNSClass, RData, RecordType};
+use trust_dns_client::tcp::TcpClientStream;
 
-use trust_dns_proto::udp::{UdpClientStream, UdpResponse};
+use trust_dns_proto::udp::{UdpClientConnect, UdpClientStream, UdpResponse};
 use trust_dns_proto::xfer::DnsMultiplexerSerialResponse;
 use trust_dns_proto::SecureDnsHandle;
 use trust_dns_server::authority::{Authority, Catalog};
@@ -53,7 +52,7 @@ fn test_secure_query_example_tcp() {
 
 fn test_secure_query_example<H>(mut client: SecureClientHandle<H>, mut io_loop: Runtime)
 where
-    H: ClientHandle + 'static,
+    H: ClientHandle + Sync + 'static,
 {
     let name = Name::from_str("www.example.com").unwrap();
     let response = io_loop
@@ -95,12 +94,12 @@ fn test_nsec_query_example_tcp() {
 
 fn test_nsec_query_example<H>(mut client: SecureClientHandle<H>, mut io_loop: Runtime)
 where
-    H: ClientHandle + 'static,
+    H: ClientHandle + Sync + 'static,
 {
     let name = Name::from_str("none.example.com").unwrap();
 
     let response = io_loop
-        .block_on(client.query(name.clone(), DNSClass::IN, RecordType::A))
+        .block_on(client.query(name, DNSClass::IN, RecordType::A))
         .expect("query failed");
     assert_eq!(response.response_code(), ResponseCode::NXDomain);
 }
@@ -125,12 +124,12 @@ fn test_nsec_query_type_tcp() {
 
 fn test_nsec_query_type<H>(mut client: SecureClientHandle<H>, mut io_loop: Runtime)
 where
-    H: ClientHandle + 'static,
+    H: ClientHandle + Sync + 'static,
 {
     let name = Name::from_str("www.example.com").unwrap();
 
     let response = io_loop
-        .block_on(client.query(name.clone(), DNSClass::IN, RecordType::NS))
+        .block_on(client.query(name, DNSClass::IN, RecordType::NS))
         .expect("query failed");
 
     assert_eq!(response.response_code(), ResponseCode::NoError);
@@ -210,7 +209,7 @@ where
     let join = std::thread::Builder::new()
         .name("thread_killer".to_string())
         .spawn(move || {
-            let succeeded = succeeded_clone.clone();
+            let succeeded = succeeded_clone;
             for _ in 0..15 {
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 if succeeded.load(std::sync::atomic::Ordering::Relaxed) {
@@ -256,17 +255,14 @@ where
 
 fn with_udp<F>(test: F)
 where
-    F: Fn(
-        SecureDnsHandle<MemoizeClientHandle<BasicClientHandle<UdpResponse<TokioUdpSocket>>>>,
-        Runtime,
-    ),
+    F: Fn(SecureDnsHandle<MemoizeClientHandle<BasicClientHandle<UdpResponse>>>, Runtime),
 {
     let succeeded = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let succeeded_clone = succeeded.clone();
     let join = std::thread::Builder::new()
         .name("thread_killer".to_string())
         .spawn(move || {
-            let succeeded = succeeded_clone.clone();
+            let succeeded = succeeded_clone;
             for _ in 0..15 {
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 if succeeded.load(std::sync::atomic::Ordering::Relaxed) {
@@ -280,7 +276,7 @@ where
 
     let mut io_loop = Runtime::new().unwrap();
     let addr: SocketAddr = ("8.8.8.8", 53).to_socket_addrs().unwrap().next().unwrap();
-    let stream = UdpClientStream::new(addr);
+    let stream: UdpClientConnect<TokioUdpSocket> = UdpClientStream::new(addr);
     let (bg, client) = ClientFuture::connect(stream);
     let client = MemoizeClientHandle::new(client);
     let secure_client = SecureClientHandle::new(client);
@@ -303,7 +299,7 @@ where
     let join = std::thread::Builder::new()
         .name("thread_killer".to_string())
         .spawn(move || {
-            let succeeded = succeeded_clone.clone();
+            let succeeded = succeeded_clone;
             for _ in 0..15 {
                 std::thread::sleep(std::time::Duration::from_secs(1));
                 if succeeded.load(std::sync::atomic::Ordering::Relaxed) {

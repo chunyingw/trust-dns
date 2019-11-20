@@ -8,13 +8,14 @@
 use std::error::Error;
 use std::io;
 use std::net::SocketAddr;
+use std::pin::Pin;
 
-use futures::Future;
+use futures::{Future, TryFutureExt};
 #[cfg(feature = "mtls")]
 use openssl::pkcs12::Pkcs12;
 use openssl::x509::X509;
+use tokio_net::tcp::TcpStream as TokioTcpStream;
 use tokio_openssl::SslStream as TokioTlsStream;
-use tokio_tcp::TcpStream as TokioTcpStream;
 
 use trust_dns_proto::error::ProtoError;
 use trust_dns_proto::tcp::TcpClientStream;
@@ -63,19 +64,20 @@ impl TlsClientStreamBuilder {
     ///
     /// * `name_server` - IP and Port for the remote DNS resolver
     /// * `dns_name` - The DNS name, Subject Public Key Info (SPKI) name, as associated to a certificate
+    #[allow(clippy::type_complexity)]
     pub fn build(
         self,
         name_server: SocketAddr,
         dns_name: String,
     ) -> (
-        Box<dyn Future<Item = TlsClientStream, Error = ProtoError> + Send>,
+        Pin<Box<dyn Future<Output = Result<TlsClientStream, ProtoError>> + Send>>,
         BufDnsStreamHandle,
     ) {
         let (stream_future, sender) = self.0.build(name_server, dns_name);
 
-        let new_future = Box::new(
+        let new_future = Box::pin(
             stream_future
-                .map(TcpClientStream::from_stream)
+                .map_ok(TcpClientStream::from_stream)
                 .map_err(ProtoError::from),
         );
 

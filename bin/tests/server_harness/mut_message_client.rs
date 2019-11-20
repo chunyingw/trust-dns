@@ -1,16 +1,16 @@
-use trust_dns::client::*;
-use trust_dns::proto::xfer::{DnsHandle, DnsRequest};
-use trust_dns::rr::dnssec::*;
-use trust_dns::rr::rdata::opt::EdnsOption;
+use trust_dns_client::client::*;
+use trust_dns_client::proto::xfer::{DnsHandle, DnsRequest};
+use trust_dns_client::rr::dnssec::*;
+use trust_dns_client::rr::rdata::opt::EdnsOption;
 
 #[derive(Clone)]
-pub struct MutMessageHandle<C: ClientHandle> {
+pub struct MutMessageHandle<C: ClientHandle + Unpin> {
     client: C,
     pub dnssec_ok: bool,
     pub support_algorithms: Option<SupportedAlgorithms>,
 }
 
-impl<C: ClientHandle> MutMessageHandle<C> {
+impl<C: ClientHandle + Unpin> MutMessageHandle<C> {
     pub fn new(client: C) -> Self {
         MutMessageHandle {
             client,
@@ -20,14 +20,14 @@ impl<C: ClientHandle> MutMessageHandle<C> {
     }
 }
 
-impl<C: ClientHandle> DnsHandle for MutMessageHandle<C> {
+impl<C: ClientHandle + Unpin> DnsHandle for MutMessageHandle<C> {
     type Response = <C as DnsHandle>::Response;
 
     fn is_verifying_dnssec(&self) -> bool {
         true
     }
 
-    fn send<R: Into<DnsRequest>>(&mut self, request: R) -> Self::Response {
+    fn send<R: Into<DnsRequest> + Unpin>(&mut self, request: R) -> Self::Response {
         let mut request = request.into();
         {
             // mutable block

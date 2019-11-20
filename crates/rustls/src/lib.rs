@@ -14,14 +14,22 @@
  * limitations under the License.
  */
 
+#![warn(
+    missing_docs,
+    clippy::dbg_macro,
+    clippy::print_stdout,
+    clippy::unimplemented
+)]
+
 //! TLS protocol related components for DNS over TLS
 
 extern crate futures;
 extern crate rustls;
 #[cfg(test)]
 extern crate tokio;
+extern crate tokio_io;
+extern crate tokio_net;
 extern crate tokio_rustls;
-extern crate tokio_tcp;
 extern crate trust_dns_proto;
 extern crate webpki;
 #[macro_use]
